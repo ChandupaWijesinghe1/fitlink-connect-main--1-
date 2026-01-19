@@ -37,7 +37,7 @@ const httpServer = createServer(app);
 const allowedOrigins = process.env.NODE_ENV === 'production'
   ? [
       process.env.FRONTEND_URL || 'https://fitlink-connect.vercel.app',
-      'https://fitlink-connect-main-1.vercel.app' // Add your actual Vercel URL here
+      'https://fitlink-connect-efac.vercel.app' // Add your actual Vercel URL here
     ]
   : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
 
