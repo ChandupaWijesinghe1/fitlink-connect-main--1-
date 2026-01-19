@@ -6,7 +6,7 @@ const userSockets = new Map();
 const initializeSocket = (server) => {
   io = socketIo(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      origin: process.env.FRONTEND_URL || 'https://fitlink-connect-efac.vercel.app',
       methods: ['GET', 'POST'],
       credentials: true
     }
