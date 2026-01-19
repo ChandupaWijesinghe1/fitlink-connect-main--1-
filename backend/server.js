@@ -25,28 +25,35 @@ import trainerRoutes from './routes/trainerRoutes.js';
 dotenv.config();
 
 // ============ DEBUG LOGGING ============
-console.log('🔍 Raw MONGODB_URI:', process.env.MONGODB_URI);
-console.log('🔍 MONGODB_URI length:', process.env.MONGODB_URI?.length);
-console.log('🔍 First 80 chars:', process.env.MONGODB_URI?.substring(0, 80));
-console.log('🔍 Has PORT in URI?:', process.env.MONGODB_URI?.includes('PORT'));
+console.log('🔍 Environment:', process.env.NODE_ENV);
+console.log('🔍 MONGODB_URI exists:', !!process.env.MONGODB_URI);
+console.log('🔍 PORT:', process.env.PORT || 5000);
 // ========================================
 
 const app = express();
 const httpServer = createServer(app);
 
+// Determine allowed origins based on environment
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [
+      process.env.FRONTEND_URL || 'https://fitlink-connect.vercel.app',
+      'https://fitlink-connect-main-1.vercel.app' // Add your actual Vercel URL here
+    ]
+  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
+
 // Socket.io setup with CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:8080'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
 });
 
 // ==================== MIDDLEWARE - CORRECT ORDER! ====================
-// Enable CORS for all origins (for testing) - you can restrict this later
+// Enable CORS
 app.use(cors({
-  origin: true, // Allow all origins for testing
+  origin: allowedOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -56,13 +63,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Add request logging middleware for debugging
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.path}`);
-  console.log('📦 Body:', req.body);
-  console.log('📋 Headers:', req.headers['content-type']);
-  next();
-});
+// Add request logging middleware for debugging (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`📥 ${req.method} ${req.path}`);
+    console.log('📦 Body:', req.body);
+    console.log('📋 Headers:', req.headers['content-type']);
+    next();
+  });
+}
 
 // Store active users with their socket IDs
 const activeUsers = new Map();
@@ -203,7 +212,8 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: 'Fitness App Backend is running',
     timestamp: new Date().toISOString(),
-    activeUsers: activeUsers.size
+    activeUsers: activeUsers.size,
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -249,44 +259,74 @@ app.use("/api/trainer", trainerScheduleRoutes);
 app.use('/api/connections', connectionRequestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/trainers', trainerRoutes);  // ← Trainer routes (uses trainerController)
+app.use('/api/trainers', trainerRoutes);
 
 // Root route
 app.get("/", (req, res) => {
   res.json({ 
     message: "Fitness App API",
+    version: "1.0.0",
+    environment: process.env.NODE_ENV || 'development',
     endpoints: {
+      health: "/api/health",
       auth: "/api/auth",
       exercises: "/api/exercises",
       schedules: "/api/schedules",
       trainers: "/api/trainers",
       connections: "/api/connections",
-      messages: "/api/messages"
+      messages: "/api/messages",
+      notifications: "/api/notifications"
     }
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({
+    error: 'Not Found',
+    message: `Route ${req.method} ${req.path} not found`,
+    availableEndpoints: '/api'
   });
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('💥 Server Error:', err);
-  res.status(500).json({ 
+  res.status(err.status || 500).json({ 
     error: 'Internal server error',
-    message: err.message 
+    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message
   });
 });
 
-// MongoDB Connection - FIXED VARIABLE NAME
+// MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("✅ MongoDB Connected Successfully!"))
+  .then(() => {
+    console.log("✅ MongoDB Connected Successfully!");
+    console.log("📦 Database:", mongoose.connection.name);
+  })
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err.message);
     console.error("Full error:", err);
+    process.exit(1); // Exit if database connection fails
   });
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('👋 SIGTERM received, closing HTTP server');
+  httpServer.close(() => {
+    console.log('💤 HTTP server closed');
+    mongoose.connection.close(false, () => {
+      console.log('💤 MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
 
 // Start Server with Socket.io
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io ready for real-time messaging`);
-  console.log(`📡 CORS enabled for testing`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 CORS enabled for: ${allowedOrigins.join(', ')}`);
 });
