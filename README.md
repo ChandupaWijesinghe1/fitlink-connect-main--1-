@@ -69,7 +69,7 @@ Node.js installed
 MongoDB installed OR MongoDB Atlas connection string
 Installation Steps
 Clone the repository
-git clone https://github.com/yourusername/fitconnect.git
+git clone https://github.com/ChandupaWijesinghe1/fitlink-connect-main--1-
 cd fitconnect
 Install Backend Dependencies
 cd server
