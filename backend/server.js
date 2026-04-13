@@ -34,17 +34,24 @@ const app = express();
 const httpServer = createServer(app);
 
 // Determine allowed origins based on environment
-const allowedOrigins = process.env.NODE_ENV === 'production'
-  ? [
-      process.env.FRONTEND_URL || 'https://fitlink-connect.vercel.app',
-      'https://fitlink-connect-efac.vercel.app' // Add your actual Vercel URL here
-    ]
-  : ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:8080'];
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://localhost:8081',
+  'http://localhost:5000',
+  process.env.FRONTEND_URL || 'https://fitlink-connect.vercel.app',
+  'https://fitlink-connect-efac.vercel.app'
+];
 
 // Socket.io setup with CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
+    origin: function (origin) {
+      // Allow localhost in development
+      if (!origin || origin.includes('localhost')) return true;
+      return allowedOrigins.includes(origin);
+    },
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -53,10 +60,26 @@ const io = new Server(httpServer, {
 // ==================== MIDDLEWARE - CORRECT ORDER! ====================
 // Enable CORS
 app.use(cors({
-  origin: allowedOrigins,
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow all localhost origins in development
+    if (origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200
 }));
 
 // Parse JSON and URL-encoded bodies
