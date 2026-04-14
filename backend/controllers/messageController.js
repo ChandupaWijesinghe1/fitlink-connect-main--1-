@@ -388,31 +388,18 @@ export const deleteMessage = async (req, res) => {
 // Get unread message count
 export const getUnreadCount = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    if (!userId) {
+    // Check if req.user exists FIRST
+    if (!req.user || !req.user._id) {
       return res.status(401).json({ 
         success: false,
         message: 'User not authenticated' 
       });
     }
 
-    const unreadCount = await Message.countDocuments({
-      'receiver.id': userId,
-      isRead: false
-    });
-
-    res.status(200).json({
-      success: true,
-      unreadCount
-    });
+    const userId = req.user._id;
+    // ... rest of code
   } catch (error) {
-    console.error('Get unread count error:', error);
-    res.status(500).json({ 
-      success: false,
-      message: 'Server error', 
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Server error' });
   }
 };
 
