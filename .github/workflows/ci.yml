@@ -42,3 +42,15 @@ jobs:
         with:
           name: backend-test-results-${{ matrix.node-version }}
           path: backend/coverage/
+
+      - name: Generate JUnit report
+        run: |
+            cd backend
+            npm test --  --reporters=junit
+
+      - name: Upload JUnit test results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: backend/junit.xml      
+
