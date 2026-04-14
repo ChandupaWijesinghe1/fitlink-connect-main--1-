@@ -6,9 +6,6 @@ on:
   pull_request:
     branches: [main, develop]
 
-permissions:
- checks: write
-
 jobs:
   # ========= BACKEND TESTS =========
   backend-tests:
@@ -39,21 +36,11 @@ jobs:
           cd backend
           npm test -- --forceExit
       
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-test-results-${{ matrix.node-version }}
-          path: backend/coverage/
-
-      - name: Generate JUnit report
-        run: |
-            cd backend
-            npm test --  --reporters=junit
-
-      - name: Upload JUnit test results
-        uses: mikepenz/action-junit-report@v4
-        if: always()
-        with:
-          report_paths: backend/junit.xml      
+      - name: Test success message
+        if: success()
+        run: echo "✅ All backend tests passed successfully!"
+      
+      - name: Test failure message
+        if: failure()
+        run: echo "❌ Backend tests failed!"
 
