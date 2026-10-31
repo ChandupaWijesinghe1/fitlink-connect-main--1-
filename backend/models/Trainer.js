@@ -15,6 +15,11 @@ const trainerSchema = new mongoose.Schema({
     issuedBy: String,
     issuedDate: Date
   }],
+  posts: [{
+    image: { type: String, required: true },
+    caption: { type: String, default: "" },
+    createdAt: { type: Date, default: Date.now }
+  }],
   isActive: { type: Boolean, default: true },
   createdAt: { type: Date, default: Date.now }
 });

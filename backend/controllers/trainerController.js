@@ -112,6 +112,112 @@ export const getTrainerClients = async (req, res) => {
   }
 };
 
+export const getTrainerFeedPosts = async (req, res) => {
+  try {
+    const currentId = req.user?._id;
+    const trainers = await Trainer.find({
+      isActive: true,
+      ...(currentId ? { _id: { $ne: currentId } } : {}),
+    }).select('name specialization profileImage posts');
+
+    const posts = [];
+    trainers.forEach((trainer) => {
+      (trainer.posts || []).forEach((post) => {
+        posts.push({
+          _id: post._id,
+          image: post.image,
+          caption: post.caption,
+          createdAt: post.createdAt,
+          trainer: {
+            _id: trainer._id,
+            name: trainer.name,
+            specialization: trainer.specialization,
+            profileImage: trainer.profileImage,
+          },
+        });
+      });
+    });
+
+    posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    res.json({ success: true, count: posts.length, posts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getMyTrainerProfile = async (req, res) => {
+  try {
+    const trainer = await Trainer.findById(req.user._id).select('-password');
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: 'Trainer not found' });
+    }
+    res.json({ success: true, trainer });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const updateMyTrainerProfile = async (req, res) => {
+  try {
+    const { bio, profileImage, specialization } = req.body;
+    const trainer = await Trainer.findById(req.user._id);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: 'Trainer not found' });
+    }
+
+    if (bio !== undefined) trainer.bio = bio;
+    if (profileImage !== undefined) trainer.profileImage = profileImage;
+    if (specialization !== undefined) trainer.specialization = specialization;
+
+    await trainer.save();
+    const updated = trainer.toObject();
+    delete updated.password;
+    res.json({ success: true, trainer: updated });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const addTrainerPost = async (req, res) => {
+  try {
+    const { image, caption } = req.body;
+    if (!image) {
+      return res.status(400).json({ success: false, message: 'Image is required' });
+    }
+
+    const trainer = await Trainer.findById(req.user._id);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: 'Trainer not found' });
+    }
+
+    trainer.posts.unshift({ image, caption: caption || '', createdAt: new Date() });
+    await trainer.save();
+
+    res.status(201).json({ success: true, posts: trainer.posts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteTrainerPost = async (req, res) => {
+  try {
+    const trainer = await Trainer.findById(req.user._id);
+    if (!trainer) {
+      return res.status(404).json({ success: false, message: 'Trainer not found' });
+    }
+
+    trainer.posts = trainer.posts.filter(
+      (post) => post._id.toString() !== req.params.postId
+    );
+    await trainer.save();
+
+    res.json({ success: true, posts: trainer.posts });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // Get all users (for trainer to browse and send connection requests)
 export const getAllUsers = async (req, res) => {
   try {
