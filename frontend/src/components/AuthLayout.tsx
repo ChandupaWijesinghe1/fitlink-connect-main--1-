@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -11,6 +12,9 @@ interface AuthLayoutProps {
 const AuthLayout = ({ children, title, subtitle, accentType = "client" }: AuthLayoutProps) => {
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
       {/* Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div 

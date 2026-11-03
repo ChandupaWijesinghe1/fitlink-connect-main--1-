@@ -1,4 +1,5 @@
 import Trainer from '../models/Trainer.js';
+import { rankClientFeed } from '../utils/contentRanker.js';
 
 // Get all trainers
 export const getAllTrainers = async (req, res) => {
@@ -140,7 +141,18 @@ export const getTrainerFeedPosts = async (req, res) => {
 
     posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    res.json({ success: true, count: posts.length, posts });
+    const isClient = req.user?.constructor?.modelName === 'User';
+    if (isClient) {
+      const ranked = await rankClientFeed(req.user, posts);
+      return res.json({
+        success: true,
+        count: ranked.posts.length,
+        ranked: ranked.ranked,
+        posts: ranked.posts,
+      });
+    }
+
+    res.json({ success: true, count: posts.length, ranked: false, posts });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

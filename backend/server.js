@@ -21,6 +21,7 @@ import connectionRequestRoutes from './routes/connectionRequests.js';
 import notificationRoutes from './routes/Notificationroutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import trainerRoutes from './routes/trainerRoutes.js';
+import progressRoutes from './routes/progressRoutes.js';
 
 dotenv.config();
 
@@ -90,7 +91,10 @@ app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.path}`);
-    console.log('📦 Body:', req.body);
+    const bodyPreview = req.body && JSON.stringify(req.body).length > 500
+      ? '[large payload omitted]'
+      : req.body;
+    console.log('📦 Body:', bodyPreview);
     console.log('📋 Headers:', req.headers['content-type']);
     next();
   });
@@ -283,6 +287,7 @@ app.use('/api/connections', connectionRequestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/trainers', trainerRoutes);
+app.use('/api/progress', progressRoutes);
 
 // Root route
 app.get("/", (req, res) => {

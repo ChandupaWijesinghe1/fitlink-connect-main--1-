@@ -8,13 +8,11 @@ import {
   Plus,
   Users,
   Calendar,
-  Edit3,
-  Camera,
-  Award,
   TrendingUp,
+  Settings,
+  LogOut,
   ChevronRight,
   X,
-  Star,
   Search,
   UserPlus,
   MapPin,
@@ -24,20 +22,19 @@ import {
   Clock,
   Building2,
   Loader2,
+  Images,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +44,15 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { getUserSchedules } from "@/api/schedules";
-import { getTrainerClients, getAllUsers } from "@/api/trainers";  // ← NEW
+import { getTrainerClients, getAllUsers, getTrainerFeedPosts } from "@/api/trainers";
+import ScheduleCard from "@/components/dashboard/ScheduleCard";
+import ContentFeed from "@/components/dashboard/ContentFeed";
+import {
+  acceptConnectionRequest,
+  getConnectionOverview,
+  sendConnectionRequest,
+} from "@/api/connections";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Schedule {
   _id: string;
@@ -72,9 +77,9 @@ const TrainerDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();  // ← ADDED logout
   
-  const [activeTab, setActiveTab] = useState<"clients" | "schedules">("clients");
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [activeTab, setActiveTab] = useState<"clients" | "schedules" | "contents">("clients");
+  const [feedPosts, setFeedPosts] = useState<any[]>([]);
+  const [isLoadingFeed, setIsLoadingFeed] = useState(false);
   const [notifications, setNotifications] = useState(3);
   const [messages, setMessages] = useState(5);
   
@@ -85,6 +90,8 @@ const TrainerDashboard = () => {
   const [myClients, setMyClients] = useState<any[]>([]);  // ← NEW: Trainer's connected clients
   const [allUsers, setAllUsers] = useState<any[]>([]);  // ← NEW: All users in system
   const [isLoadingClients, setIsLoadingClients] = useState(false);  // ← NEW
+  const [pendingIncoming, setPendingIncoming] = useState(0);
+  const [clientView, setClientView] = useState<"all" | "roster">("all");
 
   // Schedule states
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -116,16 +123,29 @@ const TrainerDashboard = () => {
       const users = await getAllUsers();
       
       // Mark which users are connected
-      const connectedClientIds = new Set(connectedClients.map((c: any) => c._id));
+      const connectedClientIds = new Set(connectedClients.map((c: any) => String(c._id)));
       
+      const overview = await getConnectionOverview();
+      const pendingOutgoing = new Set(
+        (overview.outgoing || []).map((request: any) => String(request.to.id))
+      );
+      const incomingByClient = new Map(
+        (overview.incoming || []).map((request: any) => [String(request.from.id), request._id])
+      );
+      const overviewConnected = new Set(
+        (overview.connectedClientIds || []).map((id: any) => String(id))
+      );
+
       const usersWithStatus = users.map((u: any) => ({
         ...u,
-        isConnected: connectedClientIds.has(u._id),
-        pendingRequest: false, // TODO: Check from connection requests table
+        isConnected: connectedClientIds.has(String(u._id)) || overviewConnected.has(String(u._id)),
+        pendingRequest: pendingOutgoing.has(String(u._id)),
+        incomingRequestId: incomingByClient.get(String(u._id)) || null,
       }));
       
       setMyClients(connectedClients);
       setAllUsers(usersWithStatus);
+      setPendingIncoming((overview.incoming || []).length);
       
     } catch (error: any) {
       console.error('Error fetching clients:', error);
@@ -168,10 +188,37 @@ const TrainerDashboard = () => {
     }
   }, [user?._id]);
 
+  const fetchFeedPosts = async () => {
+    try {
+      setIsLoadingFeed(true);
+      const data = await getTrainerFeedPosts();
+      setFeedPosts(data || []);
+    } catch (error: any) {
+      console.error("Error fetching trainer feed:", error);
+      toast.error("Failed to load contents");
+    } finally {
+      setIsLoadingFeed(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "contents") {
+      fetchFeedPosts();
+    }
+  }, [activeTab]);
+
   // Filter clients based on search
-  const filteredClients = allUsers.filter((client) =>
-    client.name.toLowerCase().includes(clientSearchQuery.toLowerCase())
-  );
+  const filteredClients = allUsers.filter((client) => {
+    const matchesSearch = client.name.toLowerCase().includes(clientSearchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (clientView === "roster") return Boolean(client.isConnected);
+    return true;
+  });
+
+  const plansThisWeek = schedules.filter((schedule) => {
+    const created = new Date(schedule.createdAt).getTime();
+    return Date.now() - created <= 7 * 24 * 60 * 60 * 1000;
+  }).length;
 
   const handleCreateSchedule = () => {
     navigate("/schedule/create");
@@ -186,26 +233,43 @@ const TrainerDashboard = () => {
     setClientProfileOpen(true);
   };
 
-  const handleSendConnectionRequest = (clientId: string) => {
-    // TODO: Implement actual connection request API call
-    setAllUsers((prev) =>
-      prev.map((client) =>
-        client._id === clientId ? { ...client, pendingRequest: true } : client
-      )
-    );
-    setSelectedClient((prev: any) => (prev ? { ...prev, pendingRequest: true } : null));
-    toast.success("Connection request sent!", {
-      description: "The client will be notified of your request.",
-    });
+  const handleSendConnectionRequest = async (clientId: string) => {
+    try {
+      await sendConnectionRequest({ toId: clientId, toType: "User" });
+      setAllUsers((prev) =>
+        prev.map((client) =>
+          client._id === clientId ? { ...client, pendingRequest: true } : client
+        )
+      );
+      setSelectedClient((prev: any) => (prev ? { ...prev, pendingRequest: true } : null));
+      toast.success("Connection request sent", {
+        description: "The client will be notified of your request.",
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Could not send connection request");
+    }
   };
 
-  // Format date
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+  const handleAcceptIncomingRequest = async (requestId: string, clientId: string) => {
+    try {
+      await acceptConnectionRequest(requestId);
+      setAllUsers((prev) =>
+        prev.map((client) =>
+          client._id === clientId
+            ? { ...client, isConnected: true, pendingRequest: false, incomingRequestId: null }
+            : client
+        )
+      );
+      setSelectedClient((prev: any) =>
+        prev?._id === clientId
+          ? { ...prev, isConnected: true, pendingRequest: false, incomingRequestId: null }
+          : prev
+      );
+      toast.success("Client connected");
+      fetchClients();
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Could not accept request");
+    }
   };
 
   // Count total exercises in schedule
@@ -221,12 +285,12 @@ const TrainerDashboard = () => {
   // Handle logout
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate("/trainer/login");
     toast.success("Logged out successfully!");
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen overflow-x-hidden ${activeTab === "contents" ? "bg-[#F0F2F5] dark:bg-background" : "bg-background"}`}>
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
         <div className="flex items-center justify-between p-4 max-w-7xl mx-auto">
@@ -236,6 +300,7 @@ const TrainerDashboard = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {/* Messages Button */}
             <Button
               variant="ghost"
@@ -266,177 +331,42 @@ const TrainerDashboard = () => {
               )}
             </Button>
 
-            {/* Profile Button */}
-            <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
-              <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/trainer/me")}
+              className="h-11 w-11 rounded-full overflow-hidden border-2 border-primary p-0"
+              title="My profile"
+            >
+              <Avatar className="h-full w-full">
+                <AvatarImage src={profile.avatar} alt={profile.name} />
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  {profile.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-11 w-11 rounded-full overflow-hidden border-2 border-primary p-0"
+                  className="h-11 w-11 rounded-full bg-card hover:bg-primary/20 border border-border"
+                  title="Settings"
                 >
-                  <Avatar className="h-full w-full">
-                    <AvatarImage src={profile.avatar} alt={profile.name} />
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {profile.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <Settings className="h-5 w-5 text-foreground" />
                 </Button>
-              </SheetTrigger>
-              <SheetContent className="w-full sm:max-w-md bg-background border-border overflow-y-auto">
-                <SheetHeader className="mb-6">
-                  <div className="flex items-center justify-between">
-                    <SheetTitle className="text-2xl font-heading gradient-text">
-                      MY PROFILE
-                    </SheetTitle>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setIsEditingProfile(!isEditingProfile)}
-                      className="h-9 w-9 rounded-full bg-card hover:bg-primary/20"
-                    >
-                      <Edit3 className="h-4 w-4 text-primary" />
-                    </Button>
-                  </div>
-                </SheetHeader>
-
-                {/* Profile Content */}
-                <div className="space-y-6">
-                  {/* Avatar Section */}
-                  <div className="flex flex-col items-center">
-                    <div className="relative">
-                      <Avatar className="h-28 w-28 border-4 border-primary shadow-glow">
-                        <AvatarImage src={profile.avatar} alt={profile.name} />
-                        <AvatarFallback className="bg-primary text-primary-foreground text-3xl">
-                          {profile.name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {isEditingProfile && (
-                        <Button
-                          size="icon"
-                          className="absolute bottom-0 right-0 h-9 w-9 rounded-full bg-accent hover:bg-accent/80"
-                        >
-                          <Camera className="h-4 w-4 text-accent-foreground" />
-                        </Button>
-                      )}
-                    </div>
-                    {isEditingProfile ? (
-                      <Input
-                        value={profile.name}
-                        onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                        className="mt-4 text-center text-xl font-semibold bg-card border-primary/30"
-                      />
-                    ) : (
-                      <h3 className="mt-4 text-xl font-semibold text-foreground">{profile.name}</h3>
-                    )}
-                    <p className="text-muted-foreground">{profile.specialty}</p>
-                  </div>
-
-                  {/* Stats Cards */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <Card className="bg-gradient-to-br from-primary/20 to-primary/5 border-primary/30">
-                      <CardContent className="p-4 text-center">
-                        <Users className="h-6 w-6 text-primary mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-foreground">{myClients.length}</p>
-                        <p className="text-xs text-muted-foreground">Active Clients</p>
-                      </CardContent>
-                    </Card>
-                    <Card className="bg-gradient-to-br from-accent/20 to-accent/5 border-accent/30">
-                      <CardContent className="p-4 text-center">
-                        <Star className="h-6 w-6 text-accent mx-auto mb-2" />
-                        <p className="text-2xl font-bold text-foreground">4.9</p>
-                        <p className="text-xs text-muted-foreground">Rating</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Certifications */}
-                  <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-foreground">
-                        <Award className="h-4 w-4 text-primary" />
-                        Certifications
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-2">
-                      <div className="flex flex-wrap gap-2">
-                        {profile.certifications.map((cert, idx) => (
-                          <Badge
-                            key={idx}
-                            variant="secondary"
-                            className="bg-primary/20 text-primary border-primary/30"
-                          >
-                            {cert}
-                          </Badge>
-                        ))}
-                        {isEditingProfile && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
-                          >
-                            + Add
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Experience Bar */}
-                  <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-foreground">
-                        <TrendingUp className="h-4 w-4 text-accent" />
-                        Experience Level
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-2 space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">{profile.experienceYears} years</span>
-                        <span className="text-primary font-medium">Expert</span>
-                      </div>
-                      <Progress value={profile.experienceLevel} className="h-3 bg-muted" />
-                    </CardContent>
-                  </Card>
-
-                  {/* Bio */}
-                  <Card className="bg-card border-border">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-foreground">Bio</CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-2">
-                      {isEditingProfile ? (
-                        <textarea
-                          value={profile.bio}
-                          onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-                          className="w-full p-3 rounded-lg bg-input border border-border text-foreground text-sm resize-none"
-                          rows={3}
-                        />
-                      ) : (
-                        <p className="text-sm text-muted-foreground">{profile.bio}</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {isEditingProfile && (
-                    <Button
-                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
-                      onClick={() => setIsEditingProfile(false)}
-                    >
-                      Save Changes
-                    </Button>
-                  )}
-
-                  {/* Logout Button */}
-                  <Button
-                    variant="outline"
-                    className="w-full border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </Button>
-                </div>
-              </SheetContent>
-            </Sheet>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:text-destructive"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -483,9 +413,9 @@ const TrainerDashboard = () => {
             <Card className="glass-card border-primary/20 overflow-hidden relative">
               <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
               <CardContent className="p-4 relative">
-                <Star className="h-8 w-8 text-primary mb-2" />
-                <p className="text-3xl font-bold text-foreground">4.9</p>
-                <p className="text-sm text-muted-foreground">Avg Rating</p>
+                <Clock className="h-8 w-8 text-primary mb-2" />
+                <p className="text-3xl font-bold text-foreground">{pendingIncoming}</p>
+                <p className="text-sm text-muted-foreground">Pending requests</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -499,8 +429,8 @@ const TrainerDashboard = () => {
               <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent" />
               <CardContent className="p-4 relative">
                 <TrendingUp className="h-8 w-8 text-accent mb-2" />
-                <p className="text-3xl font-bold text-foreground">+15%</p>
-                <p className="text-sm text-muted-foreground">Growth</p>
+                <p className="text-3xl font-bold text-foreground">{plansThisWeek}</p>
+                <p className="text-sm text-muted-foreground">Plans this week</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -518,25 +448,30 @@ const TrainerDashboard = () => {
                     <Building2 className="h-6 w-6 text-primary-foreground" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-foreground">Gym Management</h3>
-                    <p className="text-sm text-muted-foreground">Create and manage your gym presence</p>
+                    <h3 className="font-semibold text-foreground">Client roster</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {myClients.length} connected {myClients.length === 1 ? "client" : "clients"}
+                    </p>
                   </div>
                 </div>
                 <div className="flex gap-3">
                   <Button
                     variant="outline"
-                    onClick={() => navigate("/trainer/gym")}
+                    onClick={() => {
+                      setActiveTab("clients");
+                      setClientView("roster");
+                    }}
                     className="border-primary/50 text-foreground hover:bg-primary/20 flex items-center gap-2"
                   >
-                    <Building2 className="h-4 w-4" />
-                    Your Gym
+                    <Users className="h-4 w-4" />
+                    Connected clients
                   </Button>
                   <Button
-                    onClick={() => navigate("/trainer/gym/create")}
+                    onClick={() => navigate("/trainer/gym")}
                     className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 flex items-center gap-2 shadow-glow"
                   >
-                    <Plus className="h-4 w-4" />
-                    Create Gym Page
+                    <Building2 className="h-4 w-4" />
+                    Open roster
                   </Button>
                 </div>
               </div>
@@ -569,7 +504,7 @@ const TrainerDashboard = () => {
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-6">
           <Button
             variant={activeTab === "clients" ? "default" : "outline"}
             onClick={() => setActiveTab("clients")}
@@ -593,6 +528,18 @@ const TrainerDashboard = () => {
           >
             <Calendar className="h-4 w-4" />
             Schedules
+          </Button>
+          <Button
+            variant={activeTab === "contents" ? "default" : "outline"}
+            onClick={() => setActiveTab("contents")}
+            className={`flex items-center gap-2 ${
+              activeTab === "contents"
+                ? "bg-primary text-primary-foreground shadow-glow"
+                : "border-primary/50 text-foreground hover:bg-primary/20"
+            }`}
+          >
+            <Images className="h-4 w-4" />
+            Contents
           </Button>
         </div>
 
@@ -619,9 +566,27 @@ const TrainerDashboard = () => {
                 </div>
               </div>
 
-              <h2 className="text-xl font-semibold text-foreground mb-4">
-                {clientSearchQuery ? "Search Results" : "All Clients"}
-              </h2>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-xl font-semibold text-foreground">
+                  {clientView === "roster" ? "Connected roster" : clientSearchQuery ? "Search results" : "All clients"}
+                </h2>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant={clientView === "all" ? "default" : "outline"}
+                    onClick={() => setClientView("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={clientView === "roster" ? "default" : "outline"}
+                    onClick={() => setClientView("roster")}
+                  >
+                    Connected
+                  </Button>
+                </div>
+              </div>
 
               {isLoadingClients ? (
                 <div className="flex justify-center items-center py-20">
@@ -632,7 +597,11 @@ const TrainerDashboard = () => {
                 <div className="text-center py-20">
                   <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <p className="text-muted-foreground">
-                    {clientSearchQuery ? "No clients found" : "No clients yet"}
+                    {clientSearchQuery
+                      ? "No clients found"
+                      : clientView === "roster"
+                        ? "No connected clients yet"
+                        : "No clients yet"}
                   </p>
                 </div>
               ) : (
@@ -669,6 +638,11 @@ const TrainerDashboard = () => {
                                   <CheckCircle2 className="h-3 w-3 mr-1" />
                                   Connected
                                 </Badge>
+                              ) : client.incomingRequestId ? (
+                                <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  Incoming
+                                </Badge>
                               ) : client.pendingRequest ? (
                                 <Badge variant="secondary" className="bg-accent/20 text-accent border-accent/30">
                                   <Clock className="h-3 w-3 mr-1" />
@@ -689,7 +663,7 @@ const TrainerDashboard = () => {
                 </div>
               )}
             </motion.div>
-          ) : (
+          ) : activeTab === "schedules" ? (
             <motion.div
               key="schedules"
               initial={{ opacity: 0, x: 20 }}
@@ -697,23 +671,30 @@ const TrainerDashboard = () => {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <h2 className="text-xl font-semibold text-foreground mb-4">Created Schedules</h2>
+              <div className="mb-6">
+                <h2 className="font-heading text-xl text-foreground">Created schedules</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Open a plan to review each day’s workout.</p>
+              </div>
               
               {isLoadingSchedules ? (
                 <div className="flex justify-center items-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
                 </div>
               ) : schedules.length === 0 ? (
-                <div className="text-center py-20">
-                  <Calendar className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-semibold text-foreground mb-2">No Schedules Yet</h3>
-                  <p className="text-muted-foreground mb-6">Create your first workout schedule to get started</p>
+                <div className="rounded-3xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                    <Calendar className="h-7 w-7" />
+                  </div>
+                  <h3 className="font-heading text-lg text-foreground">No schedules yet</h3>
+                  <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
+                    Build a clean workout plan your clients can follow day by day.
+                  </p>
                   <Button
                     onClick={handleCreateSchedule}
-                    className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
+                    className="mt-6 rounded-full bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90"
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Schedule
+                    Create schedule
                   </Button>
                 </div>
               ) : (
@@ -721,47 +702,40 @@ const TrainerDashboard = () => {
                   {schedules.map((schedule, idx) => (
                     <motion.div
                       key={schedule._id}
-                      initial={{ opacity: 0, scale: 0.9 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: idx * 0.1 }}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => handleScheduleClick(schedule)}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.05 }}
                     >
-                      <Card className="glass-card border-border/50 hover:border-primary/50 transition-all duration-300 cursor-pointer overflow-hidden group">
-                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-primary via-accent to-primary" />
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-lg text-foreground group-hover:text-primary transition-colors">
-                            {schedule.title}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-2">
-                          {schedule.description && (
-                            <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                              {schedule.description}
-                            </p>
-                          )}
-                          <div className="flex items-center justify-between text-sm">
-                            <div className="flex items-center gap-4">
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Calendar className="h-4 w-4" />
-                                {schedule.days.length} days
-                              </span>
-                              <span className="flex items-center gap-1 text-muted-foreground">
-                                <Dumbbell className="h-4 w-4" />
-                                {getTotalExercises(schedule)} exercises
-                              </span>
-                            </div>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-3">
-                            Created {formatDate(schedule.createdAt)}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <ScheduleCard
+                        id={schedule._id}
+                        title={schedule.title}
+                        description={schedule.description || "Workout plan"}
+                        numberOfDays={schedule.days.length}
+                        exerciseCount={getTotalExercises(schedule)}
+                        owner="You"
+                        isOwnSchedule
+                        onClick={() => handleScheduleClick(schedule)}
+                      />
                     </motion.div>
                   ))}
                 </div>
               )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="contents"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ContentFeed
+                posts={feedPosts}
+                isLoading={isLoadingFeed}
+                emptyTitle="No contents yet"
+                emptyDescription="Other trainers have not posted images yet."
+                onOpenProfile={(id) => navigate(`/trainer/${id}`)}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -820,6 +794,39 @@ const TrainerDashboard = () => {
                       <MessageSquare className="h-4 w-4 mr-2" />
                       Send Message
                     </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-primary/50"
+                      onClick={() => {
+                        setClientProfileOpen(false);
+                        navigate(`/trainer/clients/${selectedClient._id}/progress`);
+                      }}
+                    >
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                      View Progress
+                    </Button>
+                  </div>
+                ) : selectedClient?.incomingRequestId ? (
+                  <div className="flex gap-3">
+                    <Button
+                      className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+                      onClick={() =>
+                        handleAcceptIncomingRequest(selectedClient.incomingRequestId, selectedClient._id)
+                      }
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      Accept Request
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-primary/50 hover:bg-primary/10"
+                      onClick={() => {
+                        setClientProfileOpen(false);
+                        navigate(`/trainer/notifications`);
+                      }}
+                    >
+                      Decline in Notifications
+                    </Button>
                   </div>
                 ) : selectedClient?.pendingRequest ? (
                   <div className="flex gap-3">
@@ -866,7 +873,7 @@ const TrainerDashboard = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Create Schedule FAB */}
+        {activeTab !== "contents" && (
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
@@ -881,6 +888,7 @@ const TrainerDashboard = () => {
             <span className="font-semibold">New Schedule</span>
           </Button>
         </motion.div>
+        )}
       </main>
     </div>
   );

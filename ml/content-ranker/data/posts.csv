@@ -1,0 +1,12 @@
+post_id,trainer_id,trainer_name,specialty,body_part,difficulty,caption,created_at,days_ago
+maya-leg-day,maya,Maya Fernando,strength,legs,intermediate,Leg day complete.,2026-11-02T04:49:13.230150,1
+maya-push,maya,Maya Fernando,strength,upper,intermediate,Upper-body push session.,2026-10-30T02:49:13.230150,4
+ravi-hiit,ravi,Ravi Perera,hiit,full,advanced,Twenty minute HIIT.,2026-11-01T01:49:13.230150,2
+ravi-core,ravi,Ravi Perera,hiit,core,beginner,Core finisher.,2026-10-28T00:49:13.230150,6
+nisha-hips,nisha,Nisha Jayawardena,yoga,hips,beginner,Hip mobility.,2026-11-03T02:49:13.230150,0
+nisha-flow,nisha,Nisha Jayawardena,yoga,full,beginner,Morning flow.,2026-10-31T01:49:13.230150,3
+nisha-desk,nisha,Nisha Jayawardena,yoga,back,beginner,Desk reset.,2026-10-26T01:49:13.230150,8
+daniel-bowl,daniel,Daniel Cruz,nutrition,none,beginner,Protein bowl.,2026-11-02T01:49:13.230150,1
+daniel-prep,daniel,Daniel Cruz,nutrition,none,beginner,Prep Sunday.,2026-10-29T01:49:13.230150,5
+amaya-pads,amaya,Amaya Silva,boxing,upper,intermediate,Pad work.,2026-11-01T05:49:13.230150,2
+amaya-footwork,amaya,Amaya Silva,boxing,full,intermediate,Footwork drill.,2026-10-27T06:49:13.230150,7

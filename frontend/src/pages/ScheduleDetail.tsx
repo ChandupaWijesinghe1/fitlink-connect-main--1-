@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ChevronDown, Play, Trash2, Loader2, Maximize2, Minimize2, Pause, X } from "lucide-react";
+import { ArrowLeft, Play, Trash2, Loader2, Maximize2, Minimize2, Pause, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -23,6 +23,7 @@ import {
 import { getScheduleById, deleteSchedule } from "@/api/schedules";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Exercise {
   _id: string;
@@ -47,7 +48,7 @@ const ScheduleDetail = () => {
   
   const [schedule, setSchedule] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedDays, setExpandedDays] = useState<number[]>([]);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [showFirstDeleteDialog, setShowFirstDeleteDialog] = useState(false);
   const [showSecondDeleteDialog, setShowSecondDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -122,6 +123,7 @@ const ScheduleDetail = () => {
         console.log('Fetched schedule:', data);
         console.log('First day exercises:', data.days?.[0]?.exercises);
         setSchedule(data);
+        setSelectedDay(data.days?.[0]?.dayNumber ?? null);
       } catch (error: any) {
         console.error('Error fetching schedule:', error);
         toast({
@@ -137,12 +139,6 @@ const ScheduleDetail = () => {
 
     fetchSchedule();
   }, [id]);
-
-  const toggleDay = (day: number) => {
-    setExpandedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-    );
-  };
 
   const handleFirstDelete = () => {
     setShowFirstDeleteDialog(false);
@@ -307,145 +303,137 @@ const ScheduleDetail = () => {
     );
   }
 
+  const activeDay =
+    schedule.days?.find((day: DaySchedule) => day.dayNumber === selectedDay) || schedule.days?.[0];
+
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-lg border-b border-border">
-        <div className="max-w-2xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={navigateToDashboard}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setShowFirstDeleteDialog(true)}
-              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-5 w-5" />
-            </Button>
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={navigateToDashboard}
+            className="h-10 w-10 rounded-full text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">Workout plan</p>
+            <h1 className="truncate font-heading text-lg text-foreground">{schedule.title}</h1>
           </div>
+          <ThemeToggle className="h-10 w-10" />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowFirstDeleteDialog(true)}
+            className="h-10 w-10 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="h-5 w-5" />
+          </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Schedule Info */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold text-foreground mb-3">
-            {schedule.title}
-          </h1>
-          <p className="text-muted-foreground text-lg leading-relaxed">
-            {schedule.description || "No description provided"}
-          </p>
-          <div className="mt-4 flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-primary/20 text-primary text-sm font-medium">
-              {schedule.days?.length || 0} Days
-            </span>
-            <span className="px-3 py-1 rounded-full bg-secondary text-secondary-foreground text-sm font-medium">
-              {schedule.days?.reduce((acc: number, day: DaySchedule) => acc + day.exercises.length, 0) || 0} Exercises
-            </span>
+      <main className="mx-auto max-w-4xl px-4 py-6 md:py-8">
+        {schedule.description ? (
+          <p className="mb-6 text-sm text-muted-foreground">{schedule.description}</p>
+        ) : null}
+
+        <section>
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="font-heading text-xl text-foreground">Sessions</h2>
+              <p className="text-sm text-muted-foreground">Choose a day to view the workout</p>
+            </div>
           </div>
-        </motion.div>
-
-        {/* Days Accordion */}
-        <div className="space-y-4">
-          {schedule.days?.map((dayData: DaySchedule, index: number) => (
-            <motion.div
-              key={dayData.dayNumber}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: index * 0.1 }}
-            >
-              <Card className="bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden">
-                {/* Day Header - Clickable */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            {schedule.days?.map((dayData: DaySchedule) => {
+              const isActive = dayData.dayNumber === activeDay?.dayNumber;
+              return (
                 <button
-                  onClick={() => toggleDay(dayData.dayNumber)}
-                  className="w-full px-6 py-5 flex items-center justify-between hover:bg-muted/30 transition-colors"
+                  key={dayData.dayNumber}
+                  type="button"
+                  onClick={() => setSelectedDay(dayData.dayNumber)}
+                  className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition-all ${
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                      : "border-border bg-card text-foreground hover:border-primary/40"
+                  }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
-                      <span className="text-primary-foreground font-bold text-lg">
-                        {dayData.dayNumber}
-                      </span>
-                    </div>
-                    <div className="text-left">
-                      <h3 className="text-lg font-semibold text-foreground">
-                        Day {dayData.dayNumber}
-                      </h3>
+                  <p className="text-xs opacity-80">Day</p>
+                  <p className="text-lg font-heading leading-none">{dayData.dayNumber}</p>
+                  <p className={`mt-1 text-[11px] ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                    {dayData.exercises.length} moves
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="mt-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeDay?.dayNumber}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+            >
+              <Card className="overflow-hidden rounded-3xl border-border/70">
+                <CardContent className="p-5 md:p-6">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-heading text-lg text-foreground">Day {activeDay?.dayNumber}</h3>
                       <p className="text-sm text-muted-foreground">
-                        {dayData.exercises.length} exercises
+                        {activeDay?.exercises.length || 0} exercises in this session
                       </p>
                     </div>
                   </div>
-                  <motion.div
-                    animate={{ rotate: expandedDays.includes(dayData.dayNumber) ? 180 : 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <ChevronDown className="h-5 w-5 text-muted-foreground" />
-                  </motion.div>
-                </button>
 
-                {/* Exercises List - Expandable */}
-                <AnimatePresence>
-                  {expandedDays.includes(dayData.dayNumber) && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <CardContent className="pt-0 pb-4 px-6">
-                        <div className="border-t border-border/50 pt-4 space-y-3">
-                          {dayData.exercises.map((exercise: Exercise) => (
-                            <motion.div
-                              key={exercise.exerciseId}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              className="flex items-center justify-between p-4 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors"
-                            >
-                              <div className="flex-1">
-                                <h4 className="font-medium text-foreground">
-                                  {exercise.name}
-                                </h4>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                  {exercise.sets} sets × {exercise.reps} reps
-                                </p>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openVideoDialog(exercise)}
-                                className={`h-10 w-10 rounded-full ${
-                                  exercise.videoUrl 
-                                    ? 'bg-primary/20 hover:bg-primary/30 text-primary' 
-                                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-                                }`}
-                                title={exercise.videoUrl ? "Watch video" : "No video available"}
-                              >
-                                <Play className="h-4 w-4 fill-current" />
-                              </Button>
-                            </motion.div>
-                          ))}
+                  {activeDay?.exercises?.length ? (
+                    <div className="space-y-3">
+                      {activeDay.exercises.map((exercise: Exercise, index: number) => (
+                        <div
+                          key={exercise._id || exercise.exerciseId || `${exercise.name}-${index}`}
+                          className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 md:p-4"
+                        >
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 text-sm font-heading text-foreground">
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h4 className="truncate font-medium text-foreground">{exercise.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {exercise.sets} sets · {exercise.reps} reps
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openVideoDialog(exercise)}
+                            className={`h-10 w-10 rounded-full ${
+                              exercise.videoUrl
+                                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                            title={exercise.videoUrl ? "Watch video" : "No video available"}
+                          >
+                            <Play className="h-4 w-4 fill-current" />
+                          </Button>
                         </div>
-                      </CardContent>
-                    </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                      No exercises in this session yet.
+                    </div>
                   )}
-                </AnimatePresence>
+                </CardContent>
               </Card>
             </motion.div>
-          ))}
-        </div>
-      </div>
+          </AnimatePresence>
+        </section>
+      </main>
 
       {/* First Delete Confirmation Dialog */}
       <AlertDialog open={showFirstDeleteDialog} onOpenChange={setShowFirstDeleteDialog}>
@@ -501,7 +489,7 @@ const ScheduleDetail = () => {
 
       {/* Video Dialog */}
       <Dialog open={videoDialog.open} onOpenChange={(open) => !open && closeVideoDialog()}>
-        <DialogContent className="bg-card border-border max-w-3xl">
+        <DialogContent className="max-w-3xl overflow-hidden rounded-3xl border-border bg-card">
           <DialogHeader>
             <DialogTitle className="text-foreground text-xl flex items-center justify-between">
               <span>{videoDialog.exercise?.name}</span>

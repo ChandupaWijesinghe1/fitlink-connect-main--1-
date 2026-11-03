@@ -7,6 +7,62 @@
 
 @layer base {
   :root {
+    --background: 40 33% 97%;
+    --foreground: 220 20% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 10%;
+
+    --primary: 16 100% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 16% 93%;
+    --secondary-foreground: 220 20% 12%;
+
+    --muted: 220 16% 94%;
+    --muted-foreground: 220 10% 38%;
+
+    --accent: 174 70% 36%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 220 13% 86%;
+    --input: 220 16% 93%;
+    --ring: 16 100% 52%;
+
+    --radius: 0.75rem;
+
+    --gradient-primary: linear-gradient(135deg, hsl(16 100% 52%), hsl(35 100% 50%));
+    --gradient-accent: linear-gradient(135deg, hsl(174 70% 36%), hsl(190 70% 40%));
+    --gradient-hero: linear-gradient(135deg, hsl(16 100% 52%) 0%, hsl(35 100% 50%) 50%, hsl(16 100% 58%) 100%);
+    --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 100%);
+    --glass-surface: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 250, 252, 0.88) 100%);
+
+    --shadow-glow: 0 0 40px hsl(16 100% 52% / 0.18);
+    --shadow-accent: 0 0 32px hsl(174 70% 36% / 0.16);
+    --shadow-card: 0 18px 40px -16px rgba(15, 23, 42, 0.15);
+
+    --font-heading: 'Poppins', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    --sidebar-background: 40 33% 97%;
+    --sidebar-foreground: 220 20% 10%;
+    --sidebar-primary: 16 100% 52%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 16% 93%;
+    --sidebar-accent-foreground: 220 20% 12%;
+    --sidebar-border: 220 13% 86%;
+    --sidebar-ring: 16 100% 52%;
+
+    color-scheme: light;
+  }
+
+  .dark {
     --background: 220 20% 6%;
     --foreground: 0 0% 98%;
 
@@ -35,21 +91,15 @@
     --input: 220 15% 15%;
     --ring: 16 100% 60%;
 
-    --radius: 0.75rem;
-
-    /* Custom tokens */
     --gradient-primary: linear-gradient(135deg, hsl(16 100% 60%), hsl(35 100% 55%));
     --gradient-accent: linear-gradient(135deg, hsl(174 80% 50%), hsl(190 80% 45%));
     --gradient-hero: linear-gradient(135deg, hsl(16 100% 60%) 0%, hsl(35 100% 55%) 50%, hsl(16 100% 65%) 100%);
     --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
-    
+    --glass-surface: linear-gradient(135deg, rgba(30, 35, 45, 0.9) 0%, rgba(20, 25, 35, 0.95) 100%);
+
     --shadow-glow: 0 0 60px hsl(16 100% 60% / 0.3);
     --shadow-accent: 0 0 40px hsl(174 80% 50% / 0.3);
     --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-
-    /* ✅ CHANGED: Use Poppins instead of Bebas Neue */
-    --font-heading: 'Poppins', sans-serif;
-    --font-body: 'Inter', sans-serif;
 
     --sidebar-background: 220 20% 6%;
     --sidebar-foreground: 0 0% 98%;
@@ -59,28 +109,8 @@
     --sidebar-accent-foreground: 0 0% 98%;
     --sidebar-border: 220 15% 20%;
     --sidebar-ring: 16 100% 60%;
-  }
 
-  .dark {
-    --background: 220 20% 6%;
-    --foreground: 0 0% 98%;
-    --card: 220 18% 10%;
-    --card-foreground: 0 0% 98%;
-    --popover: 220 18% 10%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 16 100% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 15%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 220 15% 18%;
-    --muted-foreground: 220 10% 60%;
-    --accent: 174 80% 50%;
-    --accent-foreground: 220 20% 6%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 220 15% 20%;
-    --input: 220 15% 15%;
-    --ring: 16 100% 60%;
+    color-scheme: dark;
   }
 }
 
@@ -104,7 +134,7 @@
 @layer components {
   .glass-card {
     @apply backdrop-blur-xl border border-border/50 rounded-2xl;
-    background: linear-gradient(135deg, rgba(30, 35, 45, 0.9) 0%, rgba(20, 25, 35, 0.95) 100%);
+    background: var(--glass-surface);
   }
 
   .gradient-text {

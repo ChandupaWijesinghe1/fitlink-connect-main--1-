@@ -7,6 +7,7 @@ interface User {
   email: string;
   phone?: string;
   specialization?: string;
+  profileImage?: string;
 }
 
 interface AuthContextType {

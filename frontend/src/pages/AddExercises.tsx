@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getAllExercises } from "@/api/exercises";
 import { createSchedule } from "@/api/schedules";
 import { useToast } from "@/hooks/use-toast";
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Exercise {
   _id: string;
@@ -209,6 +210,7 @@ const AddExercises = () => {
               <h1 className="text-xl font-bold text-foreground">{scheduleData.title}</h1>
               <p className="text-sm text-muted-foreground">Add exercises for each day</p>
             </div>
+            <ThemeToggle className="h-10 w-10" />
             <Badge variant="outline" className="border-primary/30 text-primary">
               {completedDays.length}/{numberOfDays} Days
             </Badge>

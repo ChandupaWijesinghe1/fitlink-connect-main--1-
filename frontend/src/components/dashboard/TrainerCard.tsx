@@ -33,9 +33,9 @@ const TrainerCard = ({
         onClick={() => onClick(id)}
       >
         <CardContent className="p-0">
-          <div className="relative h-32 bg-gradient-to-br from-primary/30 to-primary/10">
+          <div className="relative h-24 md:h-48 bg-gradient-to-br from-primary/40 via-accent/20 to-primary/10">
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
-              <div className="w-16 h-16 rounded-full bg-muted border-4 border-background overflow-hidden">
+              <div className="w-14 h-14 md:w-20 md:h-20 rounded-full bg-muted border-4 border-background overflow-hidden shadow-lg">
                 <img
                   src={image}
                   alt={name}
@@ -45,8 +45,8 @@ const TrainerCard = ({
             </div>
           </div>
 
-          <div className="pt-10 pb-4 px-4 text-center">
-            <h3 className="font-semibold text-foreground text-lg">{name}</h3>
+          <div className="pt-9 md:pt-12 pb-4 md:pb-5 px-4 md:px-5 text-center">
+            <h3 className="font-semibold text-foreground text-base md:text-xl">{name}</h3>
             <p className="text-primary text-sm font-medium">{specialty}</p>
 
             <div className="flex items-center justify-center gap-4 mt-3 text-sm text-muted-foreground">

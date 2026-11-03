@@ -6,9 +6,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import ThemeToggle from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
 
 const CreateSchedule = () => {
   const navigate = useNavigate();
+  const { userType } = useAuth();
+
+  const navigateToDashboard = () => {
+    navigate(userType === "trainer" ? "/trainer/dashboard" : "/dashboard");
+  };
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -44,15 +51,16 @@ const CreateSchedule = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Back Button Header */}
-      <header className="p-4 md:p-6">
+      <header className="p-4 md:p-6 flex items-center justify-between">
         <Button
           variant="ghost"
-          onClick={() => navigate("/dashboard")}
+          onClick={navigateToDashboard}
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-5 w-5 mr-2" />
           Back
         </Button>
+        <ThemeToggle />
       </header>
 
       <main className="px-4 md:px-6 pb-8 max-w-2xl mx-auto">

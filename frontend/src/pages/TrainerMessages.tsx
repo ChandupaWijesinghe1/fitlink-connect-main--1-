@@ -36,6 +36,7 @@ import {
 } from "@/api/messages";
 import { getUserSchedules } from "@/api/schedules";
 import { getAllUsers } from "@/api/trainers";  // ← NEW
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Client {
   _id: string;
@@ -492,7 +493,8 @@ const TrainerMessages = () => {
             >
               <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
             </Button>
-            <h1 className="text-lg md:text-xl font-heading tracking-wide gradient-text">Messages</h1>
+            <h1 className="text-lg md:text-xl font-heading tracking-wide gradient-text flex-1">Messages</h1>
+            <ThemeToggle className="h-9 w-9 md:h-10 md:w-10" />
           </div>
 
           {/* Search */}

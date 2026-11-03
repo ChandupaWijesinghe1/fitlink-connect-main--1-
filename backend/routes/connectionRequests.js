@@ -1,370 +1,316 @@
-import express from 'express';
-import ConnectionRequest from '../models/ConnectionRequest.js';
-import Trainer from '../models/Trainer.js';
-import User from '../models/User.js';
+import express from "express";
+import ConnectionRequest from "../models/ConnectionRequest.js";
+import Trainer from "../models/Trainer.js";
+import User from "../models/User.js";
+import { protect } from "../middleware/authMiddleware.js";
+import {
+  actorType,
+  areAlreadyConnected,
+  acceptRequestForUser,
+  getPairStatus,
+  notifyRecipientOfRequest,
+  rejectRequestForUser,
+} from "../utils/connectionService.js";
 
 const router = express.Router();
+router.use(protect);
 
-// Search for trainers or clients
-router.get('/search', async (req, res) => {
+const handleServiceError = (res, error) => {
+  const status = error.statusCode || 500;
+  res.status(status).json({
+    success: false,
+    message: error.message || "Connection request failed",
+  });
+};
+
+router.get("/overview", async (req, res) => {
   try {
-    const { query, type, requesterId, requesterType } = req.query;
+    const userId = req.user._id;
+    const userType = actorType(req.user);
 
-    if (!query || !type || !requesterId || !requesterType) {
+    const incoming = await ConnectionRequest.find({
+      "to.id": userId,
+      status: "pending",
+    }).sort({ createdAt: -1 });
+
+    const outgoing = await ConnectionRequest.find({
+      "from.id": userId,
+      status: "pending",
+    }).sort({ createdAt: -1 });
+
+    let connectedTrainerId = null;
+    let connectedClientIds = [];
+
+    if (userType === "User") {
+      const client = await User.findById(userId).select("trainer");
+      connectedTrainerId = client?.trainer || null;
+    } else {
+      const trainer = await Trainer.findById(userId).select("clients");
+      connectedClientIds = trainer?.clients || [];
+    }
+
+    res.json({
+      success: true,
+      incoming,
+      outgoing,
+      connectedTrainerId,
+      connectedClientIds,
+    });
+  } catch (error) {
+    handleServiceError(res, error);
+  }
+});
+
+router.get("/status/:otherId", async (req, res) => {
+  try {
+    const { otherType } = req.query;
+    if (!otherType) {
+      return res.status(400).json({ success: false, message: "otherType is required" });
+    }
+
+    const status = await getPairStatus(
+      req.user._id,
+      actorType(req.user),
+      req.params.otherId,
+      otherType
+    );
+
+    res.json({ success: true, status });
+  } catch (error) {
+    handleServiceError(res, error);
+  }
+});
+
+router.get("/search", async (req, res) => {
+  try {
+    const { query, type } = req.query;
+    const requesterId = req.user._id;
+    const requesterType = actorType(req.user);
+
+    if (!query || !type) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required parameters'
+        message: "Missing required parameters",
       });
     }
 
     let results = [];
 
-    if (type === 'trainer') {
+    if (type === "trainer") {
       results = await Trainer.find({
         _id: { $ne: requesterId },
         $or: [
-          { name: { $regex: query, $options: 'i' } },
-          { email: { $regex: query, $options: 'i' } },
-          { specialization: { $regex: query, $options: 'i' } }
+          { name: { $regex: query, $options: "i" } },
+          { email: { $regex: query, $options: "i" } },
+          { specialization: { $regex: query, $options: "i" } },
         ],
-        isActive: true
-      }).select('name email specialization experience profileImage bio').limit(20);
-    } else if (type === 'client') {
+        isActive: true,
+      })
+        .select("name email specialization experience profileImage bio")
+        .limit(20);
+    } else if (type === "client") {
       results = await User.find({
         _id: { $ne: requesterId },
         $or: [
-          { name: { $regex: query, $options: 'i' } },
-          { email: { $regex: query, $options: 'i' } }
-        ]
-      }).select('name email').limit(20);
+          { name: { $regex: query, $options: "i" } },
+          { email: { $regex: query, $options: "i" } },
+        ],
+      })
+        .select("name email")
+        .limit(20);
     }
 
-    // Check existing connections and pending requests
-    const resultsWithStatus = await Promise.all(results.map(async (result) => {
-      const resultObj = result.toObject();
-      
-      if (requesterType === 'Trainer') {
-        const trainer = await Trainer.findById(requesterId);
-        const isConnected = trainer.clients.some(clientId => clientId.equals(result._id));
-        resultObj.connectionStatus = isConnected ? 'connected' : 'none';
-      } else {
-        const client = await User.findById(requesterId);
-        const isConnected = client.trainer && client.trainer.equals(result._id);
-        resultObj.connectionStatus = isConnected ? 'connected' : 'none';
-      }
-
-      if (resultObj.connectionStatus === 'none') {
-        const pendingRequest = await ConnectionRequest.findOne({
-          $or: [
-            { 'from.id': requesterId, 'to.id': result._id, status: 'pending' },
-            { 'from.id': result._id, 'to.id': requesterId, status: 'pending' }
-          ]
-        });
-
-        if (pendingRequest) {
-          if (pendingRequest.from.id.equals(requesterId)) {
-            resultObj.connectionStatus = 'pending_sent';
-          } else {
-            resultObj.connectionStatus = 'pending_received';
-          }
-        }
-      }
-
-      return resultObj;
-    }));
+    const resultsWithStatus = await Promise.all(
+      results.map(async (result) => {
+        const resultObj = result.toObject();
+        const otherType = type === "trainer" ? "Trainer" : "User";
+        resultObj.connectionStatus = await getPairStatus(
+          requesterId,
+          requesterType,
+          result._id,
+          otherType
+        );
+        return resultObj;
+      })
+    );
 
     res.json({
       success: true,
-      results: resultsWithStatus
+      results: resultsWithStatus,
     });
-
   } catch (error) {
-    console.error('Search error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Search failed',
-      error: error.message
-    });
+    handleServiceError(res, error);
   }
 });
 
-// Send connection request
-router.post('/send', async (req, res) => {
+router.post("/send", async (req, res) => {
   try {
-    const { fromId, fromType, toId, toType, message } = req.body;
+    const fromId = req.user._id;
+    const fromType = actorType(req.user);
+    const { toId, toType, message } = req.body;
 
-    if (!fromId || !fromType || !toId || !toType) {
+    if (!toId || !toType) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: "Missing required fields",
+      });
+    }
+
+    const validPair =
+      (fromType === "User" && toType === "Trainer") ||
+      (fromType === "Trainer" && toType === "User");
+
+    if (!validPair) {
+      return res.status(400).json({
+        success: false,
+        message: "Connections are only allowed between a client and a trainer",
+      });
+    }
+
+    if (await areAlreadyConnected(fromId, fromType, toId, toType)) {
+      return res.status(400).json({
+        success: false,
+        message: "You are already connected",
       });
     }
 
     const existingRequest = await ConnectionRequest.findOne({
+      status: "pending",
       $or: [
-        { 'from.id': fromId, 'to.id': toId },
-        { 'from.id': toId, 'to.id': fromId }
+        { "from.id": fromId, "to.id": toId },
+        { "from.id": toId, "to.id": fromId },
       ],
-      status: 'pending'
     });
 
     if (existingRequest) {
       return res.status(400).json({
         success: false,
-        message: 'Connection request already exists'
+        message: "A connection request is already pending",
       });
     }
 
-    const SenderModel = fromType === 'Trainer' ? Trainer : User;
-    const sender = await SenderModel.findById(fromId);
-    
-    if (!sender) {
-      return res.status(404).json({
-        success: false,
-        message: 'Sender not found'
-      });
-    }
-
-    const ReceiverModel = toType === 'Trainer' ? Trainer : User;
+    const ReceiverModel = toType === "Trainer" ? Trainer : User;
     const receiver = await ReceiverModel.findById(toId);
-    
+
     if (!receiver) {
       return res.status(404).json({
         success: false,
-        message: 'Receiver not found'
+        message: "Receiver not found",
       });
     }
 
-    const connectionRequest = new ConnectionRequest({
+    const connectionRequest = await ConnectionRequest.create({
       from: {
         id: fromId,
         type: fromType,
-        name: sender.name,
-        email: sender.email
+        name: req.user.name,
+        email: req.user.email,
       },
       to: {
         id: toId,
         type: toType,
         name: receiver.name,
-        email: receiver.email
+        email: receiver.email,
       },
-      message: message || '',
-      status: 'pending'
+      message: message || "",
+      status: "pending",
     });
 
-    await connectionRequest.save();
+    await notifyRecipientOfRequest(connectionRequest);
 
     res.status(201).json({
       success: true,
-      message: 'Connection request sent successfully',
-      request: connectionRequest
+      message: "Connection request sent successfully",
+      request: connectionRequest,
     });
-
   } catch (error) {
-    console.error('Send request error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send connection request',
-      error: error.message
-    });
+    handleServiceError(res, error);
   }
 });
 
-// Get all requests
-router.get('/my-requests', async (req, res) => {
+router.get("/my-requests", async (req, res) => {
   try {
-    const { userId, userType } = req.query;
+    const userId = req.user._id;
 
-    if (!userId || !userType) {
-      return res.status(400).json({
-        success: false,
-        message: 'Missing required parameters'
-      });
-    }
-
-    const incomingRequests = await ConnectionRequest.find({
-      'to.id': userId,
-      status: 'pending'
+    const incoming = await ConnectionRequest.find({
+      "to.id": userId,
+      status: "pending",
     }).sort({ createdAt: -1 });
 
-    const outgoingRequests = await ConnectionRequest.find({
-      'from.id': userId,
-      status: 'pending'
+    const outgoing = await ConnectionRequest.find({
+      "from.id": userId,
+      status: "pending",
     }).sort({ createdAt: -1 });
 
     res.json({
       success: true,
-      incoming: incomingRequests,
-      outgoing: outgoingRequests
+      incoming,
+      outgoing,
     });
-
   } catch (error) {
-    console.error('Get requests error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch requests',
-      error: error.message
-    });
+    handleServiceError(res, error);
   }
 });
 
-// Accept connection request
-router.post('/accept/:requestId', async (req, res) => {
+router.post("/accept/:requestId", async (req, res) => {
   try {
-    const { requestId } = req.params;
-    const { userId } = req.body;
+    const request = await acceptRequestForUser(req.params.requestId, req.user._id);
+    res.json({
+      success: true,
+      message: "Connection request accepted",
+      request,
+    });
+  } catch (error) {
+    handleServiceError(res, error);
+  }
+});
 
-    const request = await ConnectionRequest.findById(requestId);
+router.post("/reject/:requestId", async (req, res) => {
+  try {
+    const request = await rejectRequestForUser(req.params.requestId, req.user._id);
+    res.json({
+      success: true,
+      message: "Connection request declined",
+      request,
+    });
+  } catch (error) {
+    handleServiceError(res, error);
+  }
+});
+
+router.delete("/cancel/:requestId", async (req, res) => {
+  try {
+    const request = await ConnectionRequest.findById(req.params.requestId);
 
     if (!request) {
       return res.status(404).json({
         success: false,
-        message: 'Request not found'
+        message: "Request not found",
       });
     }
 
-    if (!request.to.id.equals(userId)) {
+    if (String(request.from.id) !== String(req.user._id)) {
       return res.status(403).json({
         success: false,
-        message: 'Unauthorized'
+        message: "Unauthorized",
       });
     }
 
-    if (request.status !== 'pending') {
+    if (request.status !== "pending") {
       return res.status(400).json({
         success: false,
-        message: 'Request already processed'
+        message: "Cannot cancel processed request",
       });
     }
 
-    request.status = 'accepted';
-    request.updatedAt = new Date();
-    await request.save();
-
-    if (request.from.type === 'Trainer') {
-      await Trainer.findByIdAndUpdate(request.from.id, {
-        $addToSet: { clients: request.to.id }
-      });
-      await User.findByIdAndUpdate(request.to.id, {
-        trainer: request.from.id
-      });
-    } else {
-      await Trainer.findByIdAndUpdate(request.to.id, {
-        $addToSet: { clients: request.from.id }
-      });
-      await User.findByIdAndUpdate(request.from.id, {
-        trainer: request.to.id
-      });
-    }
+    await ConnectionRequest.findByIdAndDelete(req.params.requestId);
 
     res.json({
       success: true,
-      message: 'Connection request accepted',
-      request
+      message: "Request cancelled successfully",
     });
-
   } catch (error) {
-    console.error('Accept request error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to accept request',
-      error: error.message
-    });
-  }
-});
-
-// Reject connection request
-router.post('/reject/:requestId', async (req, res) => {
-  try {
-    const { requestId } = req.params;
-    const { userId } = req.body;
-
-    const request = await ConnectionRequest.findById(requestId);
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: 'Request not found'
-      });
-    }
-
-    if (!request.to.id.equals(userId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-
-    if (request.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Request already processed'
-      });
-    }
-
-    request.status = 'rejected';
-    request.updatedAt = new Date();
-    await request.save();
-
-    res.json({
-      success: true,
-      message: 'Connection request rejected',
-      request
-    });
-
-  } catch (error) {
-    console.error('Reject request error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reject request',
-      error: error.message
-    });
-  }
-});
-
-// Cancel sent request
-router.delete('/cancel/:requestId', async (req, res) => {
-  try {
-    const { requestId } = req.params;
-    const { userId } = req.query;
-
-    const request = await ConnectionRequest.findById(requestId);
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: 'Request not found'
-      });
-    }
-
-    if (!request.from.id.equals(userId)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Unauthorized'
-      });
-    }
-
-    if (request.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot cancel processed request'
-      });
-    }
-
-    await ConnectionRequest.findByIdAndDelete(requestId);
-
-    res.json({
-      success: true,
-      message: 'Request cancelled successfully'
-    });
-
-  } catch (error) {
-    console.error('Cancel request error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cancel request',
-      error: error.message
-    });
+    handleServiceError(res, error);
   }
 });
 

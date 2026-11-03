@@ -63,31 +63,76 @@ Builds dynamic frontend interface
 Node.js
 Server runtime environment
 
-4️⃣ Setup Instructions
+4️⃣ How to Run Locally
+
 Prerequisites
-Node.js installed
-MongoDB installed OR MongoDB Atlas connection string
-Installation Steps
-Clone the repository
-git clone https://github.com/ChandupaWijesinghe1/fitlink-connect-main--1-
-cd fitconnect
-Install Backend Dependencies
-cd server
-npm install
-Install Frontend Dependencies
-cd ../client
-npm install
-Configure Environment Variables
-Create .env file in server directory
+- Node.js (LTS) and npm
+- MongoDB running locally, or a MongoDB Atlas connection string
 
-Add:
+The app has two folders: `backend` (API on port 5000) and `frontend` (UI on port 8080). Run both.
 
-MONGO_URI
-JWT_SECRET
+### 1. Backend
+
+```bash
+cd backend
+npm install
+```
+
+Create `backend/.env`:
+
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/fitconnect
+JWT_SECRET=your-secret-key-here
 PORT=5000
-Run the Application
+FRONTEND_URL=http://localhost:8080
+NODE_ENV=development
+```
 
-npm run dev (if configured to run both client & server)
+For Atlas, put your Atlas URI in `MONGODB_URI`.
+
+Start the API:
+
+```bash
+npm run dev
+```
+
+You should see MongoDB connected and the server on port 5000.
+
+Optional — seed sample exercises:
+
+```bash
+node seedExercises.js
+```
+
+### 2. Frontend
+
+Open a second terminal:
+
+```bash
+cd frontend
+npm install
+```
+
+Create or edit `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:5000
+```
+
+Start the UI:
+
+```bash
+npm run dev
+```
+
+Open http://localhost:8080
+
+Register as a trainer or a client, then log in.
+
+| Service  | Command              | URL                     |
+|----------|----------------------|-------------------------|
+| Backend  | `npm run dev` in `backend`  | http://localhost:5000 |
+| Frontend | `npm run dev` in `frontend` | http://localhost:8080 |
 
 5️⃣ Author
 

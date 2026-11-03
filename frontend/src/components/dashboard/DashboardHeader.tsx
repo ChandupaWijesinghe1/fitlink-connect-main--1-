@@ -1,4 +1,4 @@
-import { Bell, MessageSquare, User, LogOut } from "lucide-react";
+import { Bell, MessageSquare, User, LogOut, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -7,6 +7,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
+import ThemeToggle from "@/components/ThemeToggle";
+import { useAuth } from "@/context/AuthContext";
 
 interface DashboardHeaderProps {
   clientName: string;
@@ -14,8 +16,10 @@ interface DashboardHeaderProps {
 
 const DashboardHeader = ({ clientName }: DashboardHeaderProps) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
 
   const handleLogout = () => {
+    logout();
     navigate("/");
   };
 
@@ -29,6 +33,7 @@ const DashboardHeader = ({ clientName }: DashboardHeaderProps) => {
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
+        <ThemeToggle className="h-10 w-10" />
         <Button
           variant="ghost"
           size="icon"
@@ -36,9 +41,6 @@ const DashboardHeader = ({ clientName }: DashboardHeaderProps) => {
           onClick={() => navigate("/messages")}
         >
           <MessageSquare className="h-5 w-5 text-foreground" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 bg-primary rounded-full text-[10px] flex items-center justify-center text-primary-foreground">
-            3
-          </span>
         </Button>
 
         <Button
@@ -48,9 +50,6 @@ const DashboardHeader = ({ clientName }: DashboardHeaderProps) => {
           onClick={() => navigate("/notifications")}
         >
           <Bell className="h-5 w-5 text-foreground" />
-          <span className="absolute -top-1 -right-1 h-4 w-4 bg-destructive rounded-full text-[10px] flex items-center justify-center text-destructive-foreground">
-            5
-          </span>
         </Button>
 
         <DropdownMenu>
@@ -64,9 +63,19 @@ const DashboardHeader = ({ clientName }: DashboardHeaderProps) => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem className="cursor-pointer">
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => navigate("/profile")}
+            >
               <User className="mr-2 h-4 w-4" />
               Profile
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => navigate("/progress")}
+            >
+              <TrendingUp className="mr-2 h-4 w-4" />
+              Progress
             </DropdownMenuItem>
             <DropdownMenuItem
               className="cursor-pointer text-destructive focus:text-destructive"

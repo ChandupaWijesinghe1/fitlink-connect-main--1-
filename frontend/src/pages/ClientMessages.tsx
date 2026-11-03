@@ -37,6 +37,7 @@ import {
 } from "@/api/messages";
 import { getScheduleById } from "@/api/schedules";
 import { getTrainerById } from "@/api/trainers";  // ← NEW
+import ThemeToggle from "@/components/ThemeToggle";
 
 interface Conversation {
   conversationId: string;
@@ -489,10 +490,11 @@ const ClientMessages = () => {
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
-              <div>
+              <div className="flex-1">
                 <h1 className="text-2xl font-bold gradient-text">Messages</h1>
                 <p className="text-sm text-muted-foreground">Chat with your trainers</p>
               </div>
+              <ThemeToggle className="h-10 w-10" />
             </div>
 
             {/* Search */}

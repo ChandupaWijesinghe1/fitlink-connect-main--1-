@@ -23,7 +23,8 @@ import {
   clearAllNotifications,
   acceptConnectionFromNotification,
   declineConnectionFromNotification
-} from "@/api/notifications"; 
+} from "@/api/notifications";
+import ThemeToggle from "@/components/ThemeToggle"; 
 
 interface Notification {
   _id: string;
@@ -296,7 +297,7 @@ const Notifications = () => {
   const backPath = isTrainer ? "/trainer/dashboard" : "/dashboard";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900/20 to-slate-900">
+    <div className="min-h-screen bg-background">
       {/* Animated Background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
@@ -305,7 +306,7 @@ const Notifications = () => {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 sticky top-0 bg-slate-900/80 backdrop-blur-xl border-b border-white/10">
+      <header className="relative z-10 sticky top-0 bg-background/80 backdrop-blur-xl border-b border-border">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -313,7 +314,7 @@ const Notifications = () => {
                 variant="ghost"
                 size="icon"
                 onClick={() => navigate(backPath)}
-                className="text-white/70 hover:text-white hover:bg-white/10"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -335,8 +336,8 @@ const Notifications = () => {
                   )}
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-white">Notifications</h1>
-                  <p className="text-sm text-white/60">
+                  <h1 className="text-xl font-bold text-foreground">Notifications</h1>
+                  <p className="text-sm text-muted-foreground">
                     {unreadCount > 0 ? `${unreadCount} unread` : "All caught up!"}
                   </p>
                 </div>
@@ -344,27 +345,28 @@ const Notifications = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <ThemeToggle className="h-10 w-10" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-white/70 hover:text-white hover:bg-white/10"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted"
                   >
                     <Filter className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-slate-800 border-white/10">
+                <DropdownMenuContent align="end" className="bg-popover border-border">
                   <DropdownMenuItem 
                     onClick={() => setFilter("all")} 
-                    className="text-white hover:bg-white/10 cursor-pointer"
+                    className="text-foreground hover:bg-muted cursor-pointer"
                   >
                     All Notifications
                     {filter === "all" && <CheckCircle className="h-4 w-4 ml-2" />}
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={() => setFilter("unread")} 
-                    className="text-white hover:bg-white/10 cursor-pointer"
+                    className="text-foreground hover:bg-muted cursor-pointer"
                   >
                     Unread Only
                     {filter === "unread" && <CheckCircle className="h-4 w-4 ml-2" />}
@@ -377,7 +379,7 @@ const Notifications = () => {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-white/70 hover:text-white hover:bg-white/10"
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted"
                     disabled={isProcessing}
                   >
                     {isProcessing ? (
@@ -387,10 +389,10 @@ const Notifications = () => {
                     )}
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-slate-800 border-white/10">
+                <DropdownMenuContent align="end" className="bg-popover border-border">
                   <DropdownMenuItem 
                     onClick={handleMarkAllAsRead} 
-                    className="text-white hover:bg-white/10 cursor-pointer"
+                    className="text-foreground hover:bg-muted cursor-pointer"
                     disabled={isProcessing || unreadCount === 0}
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
@@ -398,7 +400,7 @@ const Notifications = () => {
                   </DropdownMenuItem>
                   <DropdownMenuItem 
                     onClick={handleClearAll} 
-                    className="text-red-400 hover:bg-white/10 cursor-pointer"
+                    className="text-red-400 hover:bg-muted cursor-pointer"
                     disabled={isProcessing || notifications.length === 0}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
@@ -414,22 +416,22 @@ const Notifications = () => {
       {/* Content */}
       <main className="relative z-10 container mx-auto px-4 py-6">
         <Tabs defaultValue="all" className="w-full">
-          <TabsList className="w-full mb-6 bg-white/5 border border-white/10 p-1 rounded-2xl">
+          <TabsList className="w-full mb-6 bg-muted border border-border p-1 rounded-2xl">
             <TabsTrigger
               value="all"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-white/60"
+              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-muted-foreground"
             >
               All ({filteredNotifications.length})
             </TabsTrigger>
             <TabsTrigger
               value="messages"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white text-white/60"
+              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white text-muted-foreground"
             >
               Messages ({filteredNotifications.filter(n => n.type === "message").length})
             </TabsTrigger>
             <TabsTrigger
               value="connections"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-white/60"
+              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-muted-foreground"
             >
               Connections ({filteredNotifications.filter(n => 
                 n.type === "connection" || 
@@ -443,7 +445,7 @@ const Notifications = () => {
             <div className="flex justify-center items-center py-20">
               <div className="text-center">
                 <Loader2 className="w-8 h-8 animate-spin text-purple-500 mx-auto mb-4" />
-                <p className="text-white/60">Loading notifications...</p>
+                <p className="text-muted-foreground">Loading notifications...</p>
               </div>
             </div>
           ) : (
@@ -547,11 +549,11 @@ const NotificationList = ({
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col items-center justify-center py-20"
       >
-        <div className="p-6 rounded-full bg-white/5 mb-4">
-          <Bell className="h-12 w-12 text-white/30" />
+        <div className="p-6 rounded-full bg-muted mb-4">
+          <Bell className="h-12 w-12 text-muted-foreground/50" />
         </div>
-        <h3 className="text-xl font-semibold text-white mb-2">No notifications</h3>
-        <p className="text-white/50">You're all caught up!</p>
+        <h3 className="text-xl font-semibold text-foreground mb-2">No notifications</h3>
+        <p className="text-muted-foreground">You're all caught up!</p>
       </motion.div>
     );
   }
@@ -561,7 +563,7 @@ const NotificationList = ({
       <AnimatePresence mode="popLayout">
         {groupedNotifications.today.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3 px-2">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
               Today
             </h3>
             <div className="space-y-3">
@@ -586,7 +588,7 @@ const NotificationList = ({
 
         {groupedNotifications.earlier.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-white/40 uppercase tracking-wider mb-3 px-2">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-2">
               Earlier
             </h3>
             <div className="space-y-3">
@@ -648,8 +650,8 @@ const NotificationCard = ({
       onClick={() => !notification.isRead && markAsRead(notification._id)}
       className={`group relative p-4 rounded-2xl border cursor-pointer transition-all duration-300 hover:scale-[1.02] ${
         notification.isRead
-          ? "bg-white/5 border-white/10"
-          : "bg-gradient-to-r from-white/10 to-white/5 border-white/20 shadow-lg"
+          ? "bg-card border-border"
+          : "bg-card border-primary/30 shadow-lg"
       }`}
     >
       {/* Unread Indicator */}
@@ -669,7 +671,7 @@ const NotificationCard = ({
               <img
                 src={notification.sender.profileImage}
                 alt={notification.sender.name}
-                className="w-12 h-12 rounded-full object-cover ring-2 ring-white/20"
+                className="w-12 h-12 rounded-full object-cover ring-2 ring-border"
               />
               <div
                 className={`absolute -bottom-1 -right-1 p-1 rounded-full bg-gradient-to-r ${getNotificationColor(
@@ -693,7 +695,7 @@ const NotificationCard = ({
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h4 className="font-semibold text-white truncate">
+            <h4 className="font-semibold text-foreground truncate">
               {notification.sender?.name || notification.title}
             </h4>
             <Badge
@@ -705,10 +707,10 @@ const NotificationCard = ({
               {notification.type.replace(/_/g, ' ')}
             </Badge>
           </div>
-          <p className="text-sm text-white/70 line-clamp-2 mb-2">
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
             {notification.message}
           </p>
-          <span className="text-xs text-white/40">{getTimeAgo(notification.createdAt)}</span>
+          <span className="text-xs text-muted-foreground">{getTimeAgo(notification.createdAt)}</span>
         </div>
 
         {/* Actions */}
@@ -721,7 +723,7 @@ const NotificationCard = ({
                 e.stopPropagation();
                 markAsRead(notification._id);
               }}
-              className="h-8 w-8 text-white/50 hover:text-emerald-400 hover:bg-emerald-500/10"
+              className="h-8 w-8 text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
               disabled={isProcessing}
             >
               <CheckCircle className="h-4 w-4" />
@@ -734,7 +736,7 @@ const NotificationCard = ({
               e.stopPropagation();
               deleteNotification(notification._id);
             }}
-            className="h-8 w-8 text-white/50 hover:text-red-400 hover:bg-red-500/10"
+            className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
             disabled={isProcessing}
           >
             <Trash2 className="h-4 w-4" />
@@ -747,7 +749,7 @@ const NotificationCard = ({
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
-          className="flex gap-2 mt-4 pt-4 border-t border-white/10"
+          className="flex gap-2 mt-4 pt-4 border-t border-border"
         >
           <Button
             size="sm"
@@ -764,7 +766,7 @@ const NotificationCard = ({
           <Button
             size="sm"
             variant="outline"
-            className="flex-1 border-white/20 text-white hover:bg-white/10"
+            className="flex-1 border-border text-foreground hover:bg-muted"
             onClick={(e) => {
               e.stopPropagation();
               handleDeclineConnection(notification.metadata!.requestId!, notification._id);

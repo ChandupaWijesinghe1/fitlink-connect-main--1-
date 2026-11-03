@@ -23,15 +23,28 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getTrainerById } from "@/api/trainers";  // ← NEW
 import { useAuth } from "@/context/AuthContext";  // ← NEW
+import ThemeToggle from "@/components/ThemeToggle";
+import {
+  acceptConnectionRequest,
+  getConnectionOverview,
+  getConnectionStatus,
+  sendConnectionRequest,
+} from "@/api/connections";
 
 const TrainerProfile = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, userType } = useAuth();
+
+  const navigateToDashboard = () => {
+    navigate(userType === "trainer" ? "/trainer/dashboard" : "/dashboard");
+  };
   
   const [trainer, setTrainer] = useState<any>(null);  // ← NEW: Real trainer data
   const [isLoadingTrainer, setIsLoadingTrainer] = useState(true);  // ← NEW
-  const [connectionStatus, setConnectionStatus] = useState<"none" | "pending" | "connected">("none");
+  const [connectionStatus, setConnectionStatus] = useState<
+    "none" | "pending" | "pending_sent" | "pending_received" | "connected"
+  >("none");
   const [isLoadingAction, setIsLoadingAction] = useState(false);
 
   // ========== NEW: Fetch trainer data from backend ==========
@@ -48,7 +61,7 @@ const TrainerProfile = () => {
         toast.error("Failed to load trainer profile", {
           description: error.message || "Please try again later"
         });
-        navigate('/dashboard');
+        navigateToDashboard();
       } finally {
         setIsLoadingTrainer(false);
       }
@@ -57,6 +70,20 @@ const TrainerProfile = () => {
     fetchTrainer();
   }, [id, navigate]);
   // ========== END Fetch ==========
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      if (!id || !user?._id || userType !== "client") return;
+      try {
+        const status = await getConnectionStatus(id, "Trainer");
+        setConnectionStatus(status);
+      } catch (error) {
+        console.error("Error loading connection status:", error);
+      }
+    };
+
+    loadStatus();
+  }, [id, user?._id, userType]);
 
   // ========== NEW: Loading state ==========
   if (isLoadingTrainer) {
@@ -75,7 +102,7 @@ const TrainerProfile = () => {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">Trainer not found</p>
-          <Button onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
+          <Button onClick={navigateToDashboard}>Back to Dashboard</Button>
         </div>
       </div>
     );
@@ -83,14 +110,40 @@ const TrainerProfile = () => {
   // ========== END Loading ==========
 
   const handleSendRequest = async () => {
+    if (!id) return;
     setIsLoadingAction(true);
-    // TODO: Implement actual connection request API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setConnectionStatus("pending");
-    setIsLoadingAction(false);
-    toast.success("Connection request sent! 🎉", {
-      description: `${trainer.name} will be notified of your request.`
-    });
+    try {
+      await sendConnectionRequest({ toId: id, toType: "Trainer" });
+      setConnectionStatus("pending_sent");
+      toast.success("Connection request sent", {
+        description: `${trainer.name} will be notified of your request.`,
+      });
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Could not send connection request");
+    } finally {
+      setIsLoadingAction(false);
+    }
+  };
+
+  const handleAcceptRequest = async () => {
+    if (!id) return;
+    setIsLoadingAction(true);
+    try {
+      const overview = await getConnectionOverview();
+      const incoming = overview.incoming?.find(
+        (request: any) => String(request.from?.id) === String(id)
+      );
+      if (!incoming?._id) {
+        throw new Error("Incoming request not found");
+      }
+      await acceptConnectionRequest(incoming._id);
+      setConnectionStatus("connected");
+      toast.success("You are now connected");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || error.message || "Could not accept request");
+    } finally {
+      setIsLoadingAction(false);
+    }
   };
 
   const handleMessage = () => {
@@ -108,10 +161,22 @@ const TrainerProfile = () => {
           </Button>
         );
       case "pending":
+      case "pending_sent":
         return (
-          <Button className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" disabled>
+            <Button className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" disabled>
             <Clock className="w-4 h-4 mr-2" />
             Request Pending ⏳
+          </Button>
+        );
+      case "pending_received":
+        return (
+          <Button
+            className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
+            onClick={handleAcceptRequest}
+            disabled={isLoadingAction}
+          >
+            <Check className="w-4 h-4 mr-2" />
+            {isLoadingAction ? "Accepting..." : "Accept Request"}
           </Button>
         );
       default:
@@ -159,12 +224,13 @@ const TrainerProfile = () => {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate(-1)}
+            onClick={navigateToDashboard}
             className="hover:bg-primary/10"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <h1 className="text-2xl font-bold">Trainer Profile</h1>
+          <h1 className="text-2xl font-bold flex-1">Trainer Profile</h1>
+          <ThemeToggle />
         </motion.div>
 
         {/* Profile Header Card */}
@@ -228,10 +294,10 @@ const TrainerProfile = () => {
                     )}
                   </div>
                   
-                  <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 rounded-full border border-amber-500/30">
-                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
-                    <span className="font-bold text-amber-600">4.8</span>
-                    <span className="text-muted-foreground">⭐</span>
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-full border border-border bg-muted/40">
+                    <Users className="w-5 h-5 text-primary" />
+                    <span className="font-semibold text-foreground">{trainer.clients?.length || 0}</span>
+                    <span className="text-muted-foreground text-sm">clients</span>
                   </div>
                 </div>
 
@@ -281,6 +347,29 @@ const TrainerProfile = () => {
             </CardContent>
           </Card>
         </motion.div>
+
+        {trainer.posts && trainer.posts.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mb-6"
+          >
+            <h3 className="text-lg font-bold text-foreground mb-4">Posts</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {trainer.posts.map((post: any) => (
+                <Card key={post._id} className="overflow-hidden border-border">
+                  <img src={post.image} alt={post.caption || "Post"} className="w-full h-40 object-cover" />
+                  {post.caption && (
+                    <CardContent className="p-2">
+                      <p className="text-xs text-muted-foreground line-clamp-2">{post.caption}</p>
+                    </CardContent>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* About Section */}
         {trainer.bio && (

@@ -1,7 +1,6 @@
 import Notification from '../models/Notifications.js';
-import ConnectionRequest from '../models/ConnectionRequest.js';
-import User from '../models/User.js';
 import Trainer from '../models/Trainer.js';
+import { acceptRequestForUser, rejectRequestForUser } from '../utils/connectionService.js';
 
 // Get all notifications for current user
 export const getNotifications = async (req, res) => {
@@ -173,70 +172,7 @@ export const deleteNotification = async (req, res) => {
 // Handle connection request accept (from notification)
 export const acceptConnectionRequest = async (req, res) => {
   try {
-    const { requestId } = req.params;
-    const trainerId = req.user._id;  // ← Changed from req.user.id
-    
-    // Verify user is a trainer
-    const trainer = await Trainer.findById(trainerId);
-    if (!trainer) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Only trainers can accept connection requests' 
-      });
-    }
-    
-    const connectionRequest = await ConnectionRequest.findById(requestId);
-    
-    if (!connectionRequest) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Connection request not found' 
-      });
-    }
-    
-    if (connectionRequest.trainerId.toString() !== trainerId.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized' 
-      });
-    }
-    
-    if (connectionRequest.status !== 'pending') {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Request already processed' 
-      });
-    }
-    
-    // Accept the request
-    connectionRequest.status = 'accepted';
-    connectionRequest.respondedAt = new Date();
-    await connectionRequest.save();
-    
-    // Update user's trainer
-    await User.findByIdAndUpdate(connectionRequest.userId, {
-      trainer: trainerId
-    });
-    
-    // Create notification for client
-    const client = await User.findById(connectionRequest.userId);
-    await Notification.createNotification({
-      recipient: {
-        id: connectionRequest.userId,
-        type: 'User'
-      },
-      sender: {
-        id: trainerId,
-        type: 'Trainer',
-        name: trainer.name,
-        profileImage: trainer.profileImage
-      },
-      type: 'connection_accepted',
-      title: 'Connection Accepted',
-      message: `${trainer.name} accepted your connection request. You can now message them!`,
-      actionUrl: '/messages'
-    });
-    
+    const connectionRequest = await acceptRequestForUser(req.params.requestId, req.user._id);
     res.status(200).json({
       success: true,
       message: 'Connection request accepted',
@@ -244,10 +180,9 @@ export const acceptConnectionRequest = async (req, res) => {
     });
   } catch (error) {
     console.error('Accept connection error:', error);
-    res.status(500).json({ 
+    res.status(error.statusCode || 500).json({ 
       success: false,
-      message: 'Server error', 
-      error: error.message 
+      message: error.message || 'Server error'
     });
   }
 };
@@ -255,63 +190,7 @@ export const acceptConnectionRequest = async (req, res) => {
 // Handle connection request decline (from notification)
 export const declineConnectionRequest = async (req, res) => {
   try {
-    const { requestId } = req.params;
-    const trainerId = req.user._id;  // ← Changed from req.user.id
-    
-    const trainer = await Trainer.findById(trainerId);
-    if (!trainer) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Only trainers can decline connection requests' 
-      });
-    }
-    
-    const connectionRequest = await ConnectionRequest.findById(requestId);
-    
-    if (!connectionRequest) {
-      return res.status(404).json({ 
-        success: false,
-        message: 'Connection request not found' 
-      });
-    }
-    
-    if (connectionRequest.trainerId.toString() !== trainerId.toString()) {
-      return res.status(403).json({ 
-        success: false,
-        message: 'Not authorized' 
-      });
-    }
-    
-    if (connectionRequest.status !== 'pending') {
-      return res.status(400).json({ 
-        success: false,
-        message: 'Request already processed' 
-      });
-    }
-    
-    // Decline the request
-    connectionRequest.status = 'declined';
-    connectionRequest.respondedAt = new Date();
-    await connectionRequest.save();
-    
-    // Create notification for client
-    await Notification.createNotification({
-      recipient: {
-        id: connectionRequest.userId,
-        type: 'User'
-      },
-      sender: {
-        id: trainerId,
-        type: 'Trainer',
-        name: trainer.name,
-        profileImage: trainer.profileImage
-      },
-      type: 'connection_declined',
-      title: 'Connection Request Declined',
-      message: `${trainer.name} declined your connection request.`,
-      actionUrl: '/trainers'
-    });
-    
+    const connectionRequest = await rejectRequestForUser(req.params.requestId, req.user._id);
     res.status(200).json({
       success: true,
       message: 'Connection request declined',
@@ -319,10 +198,9 @@ export const declineConnectionRequest = async (req, res) => {
     });
   } catch (error) {
     console.error('Decline connection error:', error);
-    res.status(500).json({ 
+    res.status(error.statusCode || 500).json({ 
       success: false,
-      message: 'Server error', 
-      error: error.message 
+      message: error.message || 'Server error'
     });
   }
 };

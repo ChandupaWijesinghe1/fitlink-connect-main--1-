@@ -14,6 +14,7 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -261,13 +262,16 @@ const ExerciseManagement = () => {
                 <p className="text-sm text-muted-foreground">Manage your exercise database</p>
               </div>
             </div>
-            <Button
-              onClick={openCreateDialog}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Exercise
-            </Button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle className="h-10 w-10" />
+              <Button
+                onClick={openCreateDialog}
+                className="bg-primary hover:bg-primary/90"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Exercise
+              </Button>
+            </div>
           </div>
         </div>
       </div>
