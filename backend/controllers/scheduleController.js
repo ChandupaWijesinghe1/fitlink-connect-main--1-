@@ -1,4 +1,5 @@
 import Schedule from '../models/Schedules.js';
+import { canViewSchedule } from '../utils/scheduleAccess.js';
 
 // Save schedule to user's account
 export const saveScheduleToUser = async (req, res) => {
@@ -11,6 +12,11 @@ export const saveScheduleToUser = async (req, res) => {
     
     if (!originalSchedule) {
       return res.status(404).json({ message: 'Schedule not found' });
+    }
+
+    // Only schedules you own or that were shared with you can be copied
+    if (!(await canViewSchedule(originalSchedule, req.user))) {
+      return res.status(403).json({ message: 'You do not have access to this schedule' });
     }
 
     // Check if user already has this schedule

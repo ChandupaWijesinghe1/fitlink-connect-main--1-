@@ -147,7 +147,7 @@ const TrainerMyProfile = () => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="flex-1 text-xl md:text-2xl font-heading gradient-text">My Profile</h1>
+          <h1 className="flex-1 font-heading text-xl font-bold text-foreground">My profile</h1>
           <ThemeToggle className="h-10 w-10" />
         </div>
       </header>

@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  ArrowLeft, 
   Search, 
   Plus, 
   Edit2, 
@@ -14,7 +13,7 @@ import {
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ThemeToggle from "@/components/ThemeToggle";
+import ScreenHeader from "@/components/layout/ScreenHeader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -245,39 +244,24 @@ const ExerciseManagement = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={navigateToDashboard}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">Exercise Library</h1>
-                <p className="text-sm text-muted-foreground">Manage your exercise database</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle className="h-10 w-10" />
-              <Button
-                onClick={openCreateDialog}
-                className="bg-primary hover:bg-primary/90"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Exercise
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div className="mx-auto w-full max-w-md">
+      <ScreenHeader
+        title="Exercise manager"
+        onBack={navigateToDashboard}
+        action={
+          <button
+            type="button"
+            onClick={openCreateDialog}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground"
+            aria-label="Add exercise"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        }
+      />
 
       {/* Main Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="px-5 py-4">
         {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
@@ -540,6 +524,7 @@ const ExerciseManagement = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </div>
     </div>
   );
 };

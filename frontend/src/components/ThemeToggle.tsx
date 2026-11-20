@@ -35,17 +35,13 @@ const ThemeToggle = ({ className }: ThemeToggleProps) => {
       size="icon"
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className={cn(
-        "h-11 w-11 rounded-full bg-card hover:bg-primary/20 border border-border",
+        "h-11 w-11 rounded-full border border-border bg-card text-foreground hover:bg-primary/20",
         className
       )}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       title={isDark ? "Light mode" : "Dark mode"}
     >
-      {isDark ? (
-        <Sun className="h-5 w-5 text-foreground" />
-      ) : (
-        <Moon className="h-5 w-5 text-foreground" />
-      )}
+      {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </Button>
   );
 };

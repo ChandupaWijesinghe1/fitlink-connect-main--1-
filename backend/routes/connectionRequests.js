@@ -11,6 +11,7 @@ import {
   notifyRecipientOfRequest,
   rejectRequestForUser,
 } from "../utils/connectionService.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
 
 const router = express.Router();
 router.use(protect);
@@ -87,22 +88,23 @@ router.get("/search", async (req, res) => {
     const requesterId = req.user._id;
     const requesterType = actorType(req.user);
 
-    if (!query || !type) {
+    if (!query || !type || typeof query !== "string" || query.length > 100) {
       return res.status(400).json({
         success: false,
         message: "Missing required parameters",
       });
     }
 
+    const pattern = escapeRegex(query);
     let results = [];
 
     if (type === "trainer") {
       results = await Trainer.find({
         _id: { $ne: requesterId },
         $or: [
-          { name: { $regex: query, $options: "i" } },
-          { email: { $regex: query, $options: "i" } },
-          { specialization: { $regex: query, $options: "i" } },
+          { name: { $regex: pattern, $options: "i" } },
+          { email: { $regex: pattern, $options: "i" } },
+          { specialization: { $regex: pattern, $options: "i" } },
         ],
         isActive: true,
       })
@@ -112,8 +114,8 @@ router.get("/search", async (req, res) => {
       results = await User.find({
         _id: { $ne: requesterId },
         $or: [
-          { name: { $regex: query, $options: "i" } },
-          { email: { $regex: query, $options: "i" } },
+          { name: { $regex: pattern, $options: "i" } },
+          { email: { $regex: pattern, $options: "i" } },
         ],
       })
         .select("name email")

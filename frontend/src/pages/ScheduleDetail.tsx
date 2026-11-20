@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Play, Trash2, Loader2, Maximize2, Minimize2, Pause, X } from "lucide-react";
+import { ArrowLeft, Clock, Dumbbell, Play, Trash2, Loader2, Maximize2, Minimize2, Pause, X, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,10 +15,13 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getScheduleById, deleteSchedule } from "@/api/schedules";
+import { shareSchedule } from "@/api/messages";
+import { getTrainerClients } from "@/api/trainers";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -40,6 +41,56 @@ interface DaySchedule {
   exercises: Exercise[];
 }
 
+const exerciseKey = (exercise: Exercise, index: number) =>
+  exercise._id || exercise.exerciseId || `${exercise.name}-${index}`;
+
+const getYouTubeId = (url?: string | null): string => {
+  if (!url) return "";
+  try {
+    const trimmed = url.trim();
+    if (trimmed.includes("youtube.com/embed/")) {
+      return trimmed.split("youtube.com/embed/")[1].split("?")[0];
+    }
+    if (trimmed.includes("youtube.com/watch")) {
+      return new URL(trimmed).searchParams.get("v") || "";
+    }
+    if (trimmed.includes("youtu.be/")) {
+      return trimmed.split("youtu.be/")[1].split("?")[0].split("&")[0];
+    }
+    if (trimmed.includes("youtube.com/v/")) {
+      return trimmed.split("youtube.com/v/")[1].split("?")[0].split("&")[0];
+    }
+    return "";
+  } catch {
+    return "";
+  }
+};
+
+const sessionMinutes = (exercises: Exercise[]) =>
+  exercises.reduce((total, exercise) => total + (Number(exercise.sets) || 0), 0);
+
+const ExerciseThumb = ({ name, videoUrl }: { name: string; videoUrl?: string | null }) => {
+  const [failed, setFailed] = useState(false);
+  const thumbId = getYouTubeId(videoUrl);
+
+  if (!thumbId || failed) {
+    return (
+      <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent text-lg font-semibold text-white">
+        {(name || "?").slice(0, 1).toUpperCase()}
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={`https://i.ytimg.com/vi/${thumbId}/hqdefault.jpg`}
+      alt=""
+      className="h-16 w-16 shrink-0 rounded-xl object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+};
+
 const ScheduleDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
@@ -52,10 +103,16 @@ const ScheduleDetail = () => {
   const [showFirstDeleteDialog, setShowFirstDeleteDialog] = useState(false);
   const [showSecondDeleteDialog, setShowSecondDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [clients, setClients] = useState<{ _id: string; name: string; email?: string }[]>([]);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+  const [sharingClientId, setSharingClientId] = useState<string | null>(null);
   const [videoDialog, setVideoDialog] = useState<{ open: boolean; exercise: Exercise | null }>({
     open: false,
     exercise: null,
   });
+  const [selectedExerciseKey, setSelectedExerciseKey] = useState<string | null>(null);
+  const [heroImageFailed, setHeroImageFailed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -63,44 +120,9 @@ const ScheduleDetail = () => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Helper function to convert YouTube URLs to embed format
   const getYouTubeEmbedUrl = (url: string): string => {
-    if (!url) return '';
-    
-    try {
-      url = url.trim();
-      
-      let videoId = '';
-      
-      // Already an embed URL
-      if (url.includes('youtube.com/embed/')) {
-        videoId = url.split('youtube.com/embed/')[1].split('?')[0];
-      }
-      // Handle youtube.com/watch?v=VIDEO_ID
-      else if (url.includes('youtube.com/watch')) {
-        const urlObj = new URL(url);
-        videoId = urlObj.searchParams.get('v') || '';
-      }
-      // Handle youtu.be/VIDEO_ID
-      else if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1].split('?')[0].split('&')[0];
-      }
-      // Handle youtube.com/v/VIDEO_ID
-      else if (url.includes('youtube.com/v/')) {
-        videoId = url.split('youtube.com/v/')[1].split('?')[0].split('&')[0];
-      }
-      
-      if (videoId) {
-        // Add enablejsapi=1 for API control
-        return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&rel=0`;
-      }
-      
-      console.warn('Could not parse YouTube URL:', url);
-      return '';
-    } catch (error) {
-      console.error('Error parsing YouTube URL:', error);
-      return '';
-    }
+    const videoId = getYouTubeId(url);
+    return videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1&rel=0` : "";
   };
 
   // Helper function to navigate to correct dashboard
@@ -139,6 +161,54 @@ const ScheduleDetail = () => {
 
     fetchSchedule();
   }, [id]);
+
+  const canShare = userType === "trainer" && String(schedule?.userId || "") === String(user?._id || "");
+
+  const openShareDialog = async () => {
+    if (!user?._id) return;
+    setShowShareDialog(true);
+    setIsLoadingClients(true);
+    try {
+      const data = await getTrainerClients(user._id);
+      setClients(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error loading clients:", error);
+      toast({
+        title: "Couldn't load clients",
+        description: "Connect with a client before sharing this schedule",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingClients(false);
+    }
+  };
+
+  const handleShareWithClient = async (client: { _id: string; name: string }) => {
+    if (!schedule?._id) return;
+    try {
+      setSharingClientId(client._id);
+      await shareSchedule({
+        receiverId: client._id,
+        scheduleId: schedule._id,
+        scheduleTitle: schedule.title,
+        scheduleDays: schedule.days?.length || 0,
+      });
+      toast({
+        title: "Schedule shared",
+        description: `"${schedule.title}" was sent to ${client.name} in chat`,
+      });
+      setShowShareDialog(false);
+    } catch (error: any) {
+      console.error("Error sharing schedule:", error);
+      toast({
+        title: "Share failed",
+        description: error.response?.data?.message || "Couldn't send this schedule",
+        variant: "destructive",
+      });
+    } finally {
+      setSharingClientId(null);
+    }
+  };
 
   const handleFirstDelete = () => {
     setShowFirstDeleteDialog(false);
@@ -305,135 +375,261 @@ const ScheduleDetail = () => {
 
   const activeDay =
     schedule.days?.find((day: DaySchedule) => day.dayNumber === selectedDay) || schedule.days?.[0];
+  const activeExercises: Exercise[] = activeDay?.exercises ?? [];
+  const matchedIndex = activeExercises.findIndex(
+    (exercise, index) => exerciseKey(exercise, index) === selectedExerciseKey
+  );
+  const selectedIndex = matchedIndex >= 0 ? matchedIndex : 0;
+  const selectedExercise = activeExercises[selectedIndex] || null;
+  const selectedKey = selectedExercise ? exerciseKey(selectedExercise, selectedIndex) : null;
+  const heroVideoId = getYouTubeId(selectedExercise?.videoUrl);
+  const heroImage = heroVideoId && !heroImageFailed
+    ? `https://i.ytimg.com/vi/${heroVideoId}/hqdefault.jpg`
+    : "";
+  const minutes = sessionMinutes(activeExercises);
+  const isOwner = String(schedule.userId || "") === String(user?._id || "");
+  const dayCount = schedule.days?.length || 0;
+
+  const startWorkout = () => {
+    if (selectedExercise) openVideoDialog(selectedExercise);
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b border-border/80 bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={navigateToDashboard}
-            className="h-10 w-10 rounded-full text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Workout plan</p>
-            <h1 className="truncate font-heading text-lg text-foreground">{schedule.title}</h1>
-          </div>
-          <ThemeToggle className="h-10 w-10" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowFirstDeleteDialog(true)}
-            className="h-10 w-10 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="h-5 w-5" />
-          </Button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-muted/50">
+      <div className="relative mx-auto min-h-screen max-w-lg bg-background md:my-4 md:min-h-0 md:overflow-hidden md:rounded-[32px] md:shadow-[var(--shadow-card)]">
+        <section className="relative h-72 overflow-hidden sm:h-80">
+          {heroImage ? (
+            <img
+              src={heroImage}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              onError={() => setHeroImageFailed(true)}
+            />
+          ) : (
+            <div className="absolute inset-0 bg-[image:var(--gradient-hero)]">
+              <Dumbbell className="absolute -right-6 bottom-10 h-40 w-40 -rotate-12 text-white/20" />
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
 
-      <main className="mx-auto max-w-4xl px-4 py-6 md:py-8">
-        {schedule.description ? (
-          <p className="mb-6 text-sm text-muted-foreground">{schedule.description}</p>
-        ) : null}
-
-        <section>
-          <div className="mb-4 flex items-end justify-between gap-3">
-            <div>
-              <h2 className="font-heading text-xl text-foreground">Sessions</h2>
-              <p className="text-sm text-muted-foreground">Choose a day to view the workout</p>
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
+            <button
+              type="button"
+              onClick={navigateToDashboard}
+              aria-label="Back to dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/55"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle className="h-10 w-10 border-white/30 bg-white/90 text-neutral-900 hover:bg-white" />
+              {canShare && (
+                <button
+                  type="button"
+                  onClick={openShareDialog}
+                  aria-label="Share schedule"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/55"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+              )}
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setShowFirstDeleteDialog(true)}
+                  aria-label="Delete schedule"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-md transition-colors hover:bg-black/55"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
-            {schedule.days?.map((dayData: DaySchedule) => {
-              const isActive = dayData.dayNumber === activeDay?.dayNumber;
-              return (
-                <button
-                  key={dayData.dayNumber}
-                  type="button"
-                  onClick={() => setSelectedDay(dayData.dayNumber)}
-                  className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition-all ${
-                    isActive
-                      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                      : "border-border bg-card text-foreground hover:border-primary/40"
-                  }`}
-                >
-                  <p className="text-xs opacity-80">Day</p>
-                  <p className="text-lg font-heading leading-none">{dayData.dayNumber}</p>
-                  <p className={`mt-1 text-[11px] ${isActive ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
-                    {dayData.exercises.length} moves
-                  </p>
-                </button>
-              );
-            })}
+
+          {selectedExercise?.videoUrl ? (
+            <button
+              type="button"
+              onClick={() => openVideoDialog(selectedExercise)}
+              className="absolute inset-x-4 bottom-16 flex items-center gap-3 rounded-full bg-black/45 px-3 py-2 text-left text-white backdrop-blur-md transition-colors hover:bg-black/60"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <Play className="h-4 w-4 fill-current" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block h-1 rounded-full bg-white/40" />
+                <span className="mt-1 block truncate text-xs">Play {selectedExercise.name}</span>
+              </span>
+              <Maximize2 className="h-4 w-4 shrink-0" />
+            </button>
+          ) : (
+            <p className="absolute inset-x-5 bottom-16 truncate text-sm font-medium text-white">
+              {selectedExercise?.name || schedule.title}
+            </p>
+          )}
+        </section>
+
+        <section className="relative -mt-5 rounded-t-[28px] bg-background px-5 pb-36 pt-6">
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="min-w-0 font-heading text-2xl text-foreground">{schedule.title}</h1>
+            {minutes > 0 && (
+              <span
+                className="mt-1 flex shrink-0 items-center gap-1 text-sm text-muted-foreground"
+                title="Estimated from one minute per set"
+              >
+                <Clock className="h-4 w-4 text-accent" />
+                ~{minutes} min
+              </span>
+            )}
+          </div>
+
+          <p className="mt-2 text-sm">
+            <span className="font-semibold text-primary">Day {activeDay?.dayNumber || 1}</span>
+            <span className="text-muted-foreground">
+              {" "}
+              · {activeExercises.length} {activeExercises.length === 1 ? "exercise" : "exercises"}
+              {dayCount > 1 ? ` · ${dayCount} days` : ""}
+            </span>
+          </p>
+
+          <h2 className="mt-5 text-base font-semibold text-foreground">Description</h2>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+            {schedule.description ||
+              selectedExercise?.description ||
+              "Follow the exercises in this session, then move on to the next day."}
+          </p>
+
+          {dayCount > 1 && (
+            <div className="mt-5">
+              <h2 className="text-base font-semibold text-foreground">Sessions</h2>
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {schedule.days?.map((dayData: DaySchedule) => {
+                  const isActive = dayData.dayNumber === activeDay?.dayNumber;
+                  return (
+                    <button
+                      key={dayData.dayNumber}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDay(dayData.dayNumber);
+                        setSelectedExerciseKey(null);
+                        setHeroImageFailed(false);
+                      }}
+                      className={`shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-foreground hover:bg-muted/70"
+                      }`}
+                    >
+                      Day {dayData.dayNumber}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <h2 className="mt-5 text-base font-semibold text-foreground">Select an exercise</h2>
+          <div key={activeDay?.dayNumber} className="mt-3 space-y-3">
+              {activeExercises.length ? (
+                activeExercises.map((exercise, index) => {
+                  const key = exerciseKey(exercise, index);
+                  const isSelected = key === selectedKey;
+                  const minutesForExercise = Number(exercise.sets) || 0;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedExerciseKey(key);
+                        setHeroImageFailed(false);
+                      }}
+                      aria-pressed={isSelected}
+                      className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-colors ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border bg-card hover:border-primary/40"
+                      }`}
+                    >
+                      <ExerciseThumb name={exercise.name} videoUrl={exercise.videoUrl} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-foreground">{exercise.name}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {exercise.sets} sets · {exercise.reps} reps
+                        </span>
+                      </span>
+                      {minutesForExercise > 0 && (
+                        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3.5 w-3.5 text-accent" />
+                          ~{minutesForExercise} min
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+                  No exercises in this session yet.
+                </div>
+              )}
           </div>
         </section>
 
-        <section className="mt-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeDay?.dayNumber}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
+        <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30">
+          <div className="pointer-events-none mx-auto max-w-lg bg-gradient-to-t from-background via-background to-transparent px-5 pb-5 pt-8">
+            <Button
+              type="button"
+              onClick={startWorkout}
+              disabled={!selectedExercise}
+              className="pointer-events-auto h-14 w-full rounded-full bg-primary text-base font-semibold text-primary-foreground shadow-[var(--shadow-glow)] hover:bg-primary/90"
             >
-              <Card className="overflow-hidden rounded-3xl border-border/70">
-                <CardContent className="p-5 md:p-6">
-                  <div className="mb-5 flex items-center justify-between">
-                    <div>
-                      <h3 className="font-heading text-lg text-foreground">Day {activeDay?.dayNumber}</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {activeDay?.exercises.length || 0} exercises in this session
-                      </p>
-                    </div>
-                  </div>
+              Start workout
+            </Button>
+          </div>
+        </div>
+      </div>
 
-                  {activeDay?.exercises?.length ? (
-                    <div className="space-y-3">
-                      {activeDay.exercises.map((exercise: Exercise, index: number) => (
-                        <div
-                          key={exercise._id || exercise.exerciseId || `${exercise.name}-${index}`}
-                          className="flex items-center gap-3 rounded-2xl border border-border/60 bg-muted/20 p-3 md:p-4"
-                        >
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 text-sm font-heading text-foreground">
-                            {index + 1}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="truncate font-medium text-foreground">{exercise.name}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {exercise.sets} sets · {exercise.reps} reps
-                            </p>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openVideoDialog(exercise)}
-                            className={`h-10 w-10 rounded-full ${
-                              exercise.videoUrl
-                                ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                            title={exercise.videoUrl ? "Watch video" : "No video available"}
-                          >
-                            <Play className="h-4 w-4 fill-current" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="max-w-md rounded-3xl border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Share in chat</DialogTitle>
+            <DialogDescription>
+              Send "{schedule.title}" to a connected client. They can open it from Messages.
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingClients ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : clients.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              No connected clients yet. Connect with a client, then share this schedule.
+            </p>
+          ) : (
+            <div className="max-h-80 space-y-2 overflow-y-auto">
+              {clients.map((client) => (
+                <button
+                  key={client._id}
+                  type="button"
+                  disabled={sharingClientId !== null}
+                  onClick={() => handleShareWithClient(client)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border bg-muted/20 px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-muted/40 disabled:opacity-60"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">{client.name}</span>
+                    {client.email ? (
+                      <span className="block truncate text-xs text-muted-foreground">{client.email}</span>
+                    ) : null}
+                  </span>
+                  {sharingClientId === client._id ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
                   ) : (
-                    <div className="rounded-2xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-                      No exercises in this session yet.
-                    </div>
+                    <Share2 className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          </AnimatePresence>
-        </section>
-      </main>
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* First Delete Confirmation Dialog */}
       <AlertDialog open={showFirstDeleteDialog} onOpenChange={setShowFirstDeleteDialog}>

@@ -1,28 +1,12 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";  // ← UPDATED
-import { 
-  ArrowLeft, 
-  Search, 
-  Send, 
-  Calendar, 
-  MoreVertical, 
-  Check, 
-  CheckCheck, 
-  Clock, 
-  Dumbbell, 
-  ChevronRight,
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import {
+  Send,
+  Calendar,
   Loader2,
-  Play,
-  ArrowRight 
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { initializeSocket, getSocket, disconnectSocket } from "@/lib/socket";
@@ -36,7 +20,8 @@ import {
 } from "@/api/messages";
 import { getUserSchedules } from "@/api/schedules";
 import { getAllUsers } from "@/api/trainers";  // ← NEW
-import ThemeToggle from "@/components/ThemeToggle";
+import ChatThread from "@/components/chat/ChatThread";
+import ChatList from "@/components/chat/ChatList";
 
 interface Client {
   _id: string;
@@ -55,6 +40,8 @@ interface Conversation {
   lastMessage: {
     message: string;
     createdAt: string;
+    messageType?: string;
+    sender?: { id: string };
   };
   unreadCount: number;
 }
@@ -94,9 +81,6 @@ const TrainerMessages = () => {
   const [searchParams] = useSearchParams();  // ← NEW
   const { user } = useAuth();
   const { toast } = useToast();
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
   const [clients, setClients] = useState<Client[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -118,7 +102,7 @@ const TrainerMessages = () => {
   useEffect(() => {
     if (!user?._id) return;
 
-    const socket = initializeSocket(user._id);
+    const socket = initializeSocket();
 
     // Listen for incoming messages
     socket.on('message:receive', (message: Message) => {
@@ -321,17 +305,9 @@ const TrainerMessages = () => {
         messageType: 'text',
       };
 
-      // Send via API
+      // Send via API. The server saves the message and pushes it to the
+      // receiver over the socket, so nothing is emitted from here.
       await sendMessageAPI(messageData);
-
-      // Send via Socket for real-time
-      socket.emit('message:send', {
-        senderId: user._id,
-        senderType: 'Trainer',
-        receiverId: selectedClient._id,
-        receiverType: 'User',
-        message: newMessage.trim(),
-      });
 
       setNewMessage("");
 
@@ -413,41 +389,15 @@ const TrainerMessages = () => {
     }
   };
 
-  // Auto-scroll
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
   // Get conversation for client
   const getClientConversation = (clientId: string) => {
     return conversations.find(conv => conv.otherUser.id === clientId);
   };
 
   // Filter clients - only show clients with conversations
-  const filteredClients = clients.filter(client => {
-    const hasConversation = conversations.some(conv => conv.otherUser.id === client._id);
-    const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return hasConversation && matchesSearch;
-  });
-
-  // Format time
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
-  };
+  const filteredClients = clients.filter((client) =>
+    conversations.some((conv) => conv.otherUser.id === client._id)
+  );
 
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -477,256 +427,73 @@ const TrainerMessages = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+    <div className="fixed inset-x-0 top-0 bottom-[var(--app-bottom-nav)] z-30 flex flex-col overflow-hidden bg-background md:flex-row">
       {/* Sidebar - Client List (Hidden on mobile when chat is open) */}
       <div className={`${
-        selectedClient ? 'hidden md:flex' : 'flex'
-      } w-full md:w-80 border-r border-border bg-card/50 flex-col`}>
-        {/* Header */}
-        <div className="p-3 md:p-4 border-b border-border">
-          <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/trainer/dashboard")}
-              className="text-muted-foreground hover:text-foreground h-9 w-9 md:h-10 md:w-10"
-            >
-              <ArrowLeft className="w-4 h-4 md:w-5 md:h-5" />
-            </Button>
-            <h1 className="text-lg md:text-xl font-heading tracking-wide gradient-text flex-1">Messages</h1>
-            <ThemeToggle className="h-9 w-9 md:h-10 md:w-10" />
-          </div>
-
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search clients..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-secondary/50 border-border focus:border-primary text-sm md:text-base h-9 md:h-10"
-            />
-          </div>
-        </div>
-
-        {/* Client List */}
-        <ScrollArea className="flex-1">
-          {isLoadingClients ? (
-            <div className="flex justify-center items-center py-20">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
-          ) : filteredClients.length === 0 ? (
-            <div className="text-center py-20 px-4">
-              <p className="text-muted-foreground text-sm">No clients yet</p>
-            </div>
-          ) : (
-            <div className="p-2">
-              {filteredClients.map((client, index) => {
-                const conversation = getClientConversation(client._id);
-
-                return (
-                  <motion.div
-                    key={client._id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <button
-                      onClick={() => handleClientSelect(client)}
-                      className={`w-full p-2.5 md:p-3 rounded-xl flex items-center gap-2 md:gap-3 transition-all duration-200 ${
-                        selectedClient?._id === client._id
-                          ? "bg-gradient-to-r from-primary/20 to-accent/10 border border-primary/30"
-                          : "hover:bg-secondary/50"
-                      }`}
-                    >
-                      <Avatar className="w-10 h-10 md:w-12 md:h-12 border-2 border-primary/30">
-                        <AvatarImage src={client.profileImage} />
-                        <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground font-bold text-sm">
-                          {client.name.split(" ").map(n => n[0]).join("")}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 text-left min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-foreground truncate text-sm md:text-base">
-                            {client.name}
-                          </span>
-                          {conversation && (
-                            <span className="text-xs text-muted-foreground ml-2">
-                              {formatTime(conversation.lastMessage.createdAt)}
-                            </span>
-                          )}
-                        </div>
-                        {conversation && (
-                          <p className="text-xs md:text-sm text-muted-foreground truncate">
-                            {conversation.lastMessage.message}
-                          </p>
-                        )}
-                      </div>
-                      {conversation && conversation.unreadCount > 0 && (
-                        <Badge className="bg-gradient-to-r from-primary to-orange-500 text-primary-foreground border-0 min-w-[20px] md:min-w-[24px] h-5 md:h-6 flex items-center justify-center text-xs">
-                          {conversation.unreadCount}
-                        </Badge>
-                      )}
-                    </button>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </ScrollArea>
+        selectedClient ? "hidden md:flex" : "flex"
+      } h-full w-full flex-col md:w-[400px] md:border-r md:border-border`}>
+        <ChatList
+          items={filteredClients.map((client) => {
+            const conversation = getClientConversation(client._id);
+            return {
+              id: client._id,
+              name: client.name,
+              image: client.profileImage,
+              preview: conversation
+                ? conversation.lastMessage.messageType === "schedule"
+                  ? "Shared a workout plan"
+                  : conversation.lastMessage.message
+                : undefined,
+              time: conversation?.lastMessage.createdAt,
+              unreadCount: conversation?.unreadCount || 0,
+              sentByMe: String(conversation?.lastMessage.sender?.id || "") === String(user?._id || ""),
+            };
+          })}
+          selectedId={selectedClient?._id}
+          isLoading={isLoadingClients}
+          emptyText="No clients yet"
+          onSelect={(id) => {
+            const client = filteredClients.find((item) => item._id === id);
+            if (client) handleClientSelect(client);
+          }}
+          onBack={() => navigate("/trainer/dashboard")}
+        />
       </div>
 
       {/* Chat Area (Shown on mobile when client is selected) */}
       {selectedClient ? (
-        <div className="flex-1 flex flex-col h-screen md:h-auto">
-          {/* Chat Header - Fixed */}
-          <div className="sticky top-0 z-10 p-3 md:p-4 border-b border-border bg-card/95 backdrop-blur-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 md:gap-3">
-                {/* Back button for mobile */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setSelectedClient(null);
-                    // Clear the clientId from URL
-                    navigate('/trainer/messages', { replace: true });
-                  }}
-                  className="md:hidden text-muted-foreground hover:text-foreground h-9 w-9"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-                <Avatar className="w-9 h-9 md:w-11 md:h-11 border-2 border-accent/50">
-                  <AvatarImage src={selectedClient.profileImage} />
-                  <AvatarFallback className="bg-gradient-to-br from-accent to-primary text-accent-foreground font-bold text-sm">
-                    {selectedClient.name.split(" ").map(n => n[0]).join("")}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h2 className="font-semibold text-foreground text-sm md:text-base">{selectedClient.name}</h2>
-                  <p className="text-xs text-accent">
-                    {typingUsers.has(selectedClient._id) ? "typing..." : "Client"}
-                  </p>
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground h-9 w-9 md:h-10 md:w-10">
-                <MoreVertical className="w-4 h-4 md:w-5 md:h-5" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Messages - Scrollable area between header and input */}
-          <div className="flex-1 overflow-y-auto p-3 md:p-4">
-            {isLoadingMessages ? (
-              <div className="flex justify-center items-center h-full">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-center">
-                <div>
-                  <Send className="h-12 w-12 mx-auto mb-4 text-accent" />
-                  <p className="text-muted-foreground">Start your conversation with {selectedClient.name}</p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3 md:space-y-4 max-w-3xl mx-auto">
-                <AnimatePresence>
-                  {messages.map((message, index) => (
-                    <motion.div
-                      key={message._id}
-                      initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={{ delay: index * 0.02 }}
-                      className={`flex ${message.sender.id === user?._id ? "justify-end" : "justify-start"}`}
-                    >
-                     {message.messageType === "schedule" ? (
-                        <div 
-                          className={`max-w-[85%] md:max-w-[70%] rounded-2xl overflow-hidden cursor-pointer ${
-                            message.sender.id === user?._id ? "rounded-br-md" : "rounded-bl-md"
-                          }`}
-                          onClick={() => {
-                            // Navigate to schedule detail if scheduleId exists
-                            if (message.scheduleId) {
-                              navigate(`/schedule/${message.scheduleId}`);
-                            } else {
-                              toast({
-                                title: "Schedule Not Found",
-                                description: "This schedule is no longer available",
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                        >
-                          <div className="bg-gradient-to-br from-accent/20 to-primary/20 border border-accent/30 p-3 md:p-4 hover:border-accent/50 transition-all">
-                            <div className="flex items-center gap-2 mb-2 md:mb-3">
-                              <div className="p-1.5 md:p-2 rounded-lg bg-accent/20">
-                                <Calendar className="w-4 h-4 md:w-5 md:h-5 text-accent" />
-                              </div>
-                              <span className="font-semibold text-accent text-sm md:text-base">Workout Schedule</span>
-                            </div>
-                            <div className="bg-card/80 backdrop-blur-sm rounded-xl p-3 md:p-4 border border-border/50">
-                              <h4 className="font-bold text-foreground mb-1 md:mb-2 text-sm md:text-base">
-                                {message.scheduleData?.title || "Workout Schedule"}
-                              </h4>
-                              <div className="flex items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground">
-                                <span>📅 {message.scheduleData?.days || 0} days</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs text-accent font-medium mt-2 md:mt-3 pt-2 border-t border-accent/20">
-                                <span>Click to view details</span>
-                                <ArrowRight className="h-3 w-3 md:h-4 md:w-4" />
-                              </div>
-                            </div>
-                          </div>
-                          <div className={`px-3 md:px-4 py-1.5 md:py-2 ${
-                            message.sender.id === user?._id
-                              ? "bg-gradient-to-r from-primary to-orange-500"
-                              : "bg-secondary/80"
-                          }`}>
-                            <div className={`flex items-center justify-end gap-1 ${
-                              message.sender.id === user?._id ? "text-primary-foreground/70" : "text-muted-foreground"
-                            }`}>
-                              <span className="text-xs">{formatMessageTime(message.createdAt)}</span>
-                              {message.sender.id === user?._id && (
-                                message.isRead ? <CheckCheck className="w-3 h-3 md:w-4 md:h-4" /> : <Check className="w-3 h-3 md:w-4 md:h-4" />
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className={`max-w-[85%] md:max-w-[70%] p-3 md:p-4 rounded-2xl ${
-                          message.sender.id === user?._id
-                            ? "bg-gradient-to-br from-primary to-orange-500 text-primary-foreground rounded-br-md"
-                            : "bg-secondary/80 text-foreground rounded-bl-md border border-border/50"
-                        }`}>
-                          <p className="text-sm md:text-base break-words">{message.message}</p>
-                          <div className={`flex items-center justify-end gap-1 mt-1 md:mt-2 ${
-                            message.sender.id === user?._id ? "text-primary-foreground/70" : "text-muted-foreground"
-                          }`}>
-                            <span className="text-xs">{formatMessageTime(message.createdAt)}</span>
-                            {message.sender.id === user?._id && (
-                              message.isRead ? <CheckCheck className="w-3 h-3 md:w-4 md:h-4" /> : <Check className="w-3 h-3 md:w-4 md:h-4" />
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-                <div ref={scrollRef} />
-              </div>
-            )}
-          </div>
-
-          {/* Message Input - Fixed at bottom */}
-          <div className="sticky bottom-0 z-10 p-3 md:p-4 border-t border-border bg-card/95 backdrop-blur-sm">
-            <div className="max-w-3xl mx-auto">
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="flex items-center gap-1">
-                  <Sheet open={showScheduleSheet} onOpenChange={setShowScheduleSheet}>
+        <div className="flex h-full min-h-0 flex-1 flex-col">
+          <ChatThread
+            title={selectedClient.name}
+            subtitle={typingUsers.has(selectedClient._id) ? "typing..." : undefined}
+            messages={messages}
+            currentUserId={user?._id}
+            isLoading={isLoadingMessages}
+            isSending={isSending}
+            draft={newMessage}
+            onDraftChange={setNewMessage}
+            onSend={handleSendMessage}
+            onBack={() => {
+              setSelectedClient(null);
+              navigate("/trainer/messages", { replace: true });
+            }}
+            onTyping={handleTyping}
+            onStopTyping={handleStopTyping}
+            formatTime={formatMessageTime}
+            onOpenSchedule={(scheduleId) => navigate(`/schedule/${scheduleId}`)}
+            menuLabel="View progress"
+            onMenu={() => navigate(`/trainer/clients/${selectedClient._id}/progress`)}
+            emptyText={`Start your conversation with ${selectedClient.name}`}
+            leadingAction={
+              <Sheet open={showScheduleSheet} onOpenChange={setShowScheduleSheet}>
                     <SheetTrigger asChild>
-                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-accent h-9 w-9 md:h-10 md:w-10">
-                        <Calendar className="w-4 h-4 md:w-5 md:h-5" />
-                      </Button>
+                      <button
+                        type="button"
+                        aria-label="Share a schedule"
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-accent"
+                      >
+                        <Calendar className="h-5 w-5" />
+                      </button>
                     </SheetTrigger>
                     <SheetContent className="bg-card border-border w-[90vw] sm:w-[400px]">
                       <SheetHeader>
@@ -773,38 +540,8 @@ const TrainerMessages = () => {
                       )}
                     </SheetContent>
                   </Sheet>
-                </div>
-
-                <div className="flex-1 relative">
-                  <Input
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => {
-                      setNewMessage(e.target.value);
-                      handleTyping();
-                    }}
-                    onBlur={handleStopTyping}
-                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                    disabled={isSending}
-                    className="bg-secondary/50 border-border focus:border-primary text-sm md:text-base h-9 md:h-10"
-                  />
-                </div>
-
-                <Button
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim() || isSending}
-                  className="bg-gradient-to-r from-primary to-orange-500 hover:from-primary/90 hover:to-orange-500/90 text-primary-foreground shadow-lg shadow-primary/30 h-9 w-9 md:h-10 md:w-10"
-                  size="icon"
-                >
-                  {isSending ? (
-                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4 md:w-5 md:h-5" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
+            }
+          />
         </div>
       ) : (
         <div className="hidden md:flex flex-1 items-center justify-center">

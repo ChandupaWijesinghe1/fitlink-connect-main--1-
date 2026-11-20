@@ -28,12 +28,6 @@ export const signup = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  // MOVE DEBUG BEFORE try-catch
-  console.log('========== LOGIN REQUEST ==========');
-  console.log('📥 req.body:', req.body);
-  console.log('📥 req.headers:', req.headers);
-  console.log('===================================');
-  
   try {
     // Check if body exists
     if (!req.body) {
@@ -56,7 +50,11 @@ export const login = async (req, res) => {
       expiresIn: "1d",
     });
 
-    res.json({ message: "Login successful", token, user });
+    // Never send the password hash to the browser
+    const safeUser = user.toObject();
+    delete safeUser.password;
+
+    res.json({ message: "Login successful", token, user: safeUser });
   } catch (error) {
     console.error('❌ Login error:', error);
     res.status(500).json({ error: error.message });

@@ -89,8 +89,8 @@ const TrainerGym = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="font-heading text-2xl gradient-text">CLIENT ROSTER</h1>
-              <p className="text-sm text-muted-foreground">Connected clients only</p>
+              <h1 className="font-heading text-xl font-bold text-foreground">Gym</h1>
+              <p className="text-xs text-muted-foreground">Connected clients</p>
             </div>
           </div>
           <div className="flex items-center gap-3">

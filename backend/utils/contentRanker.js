@@ -87,46 +87,182 @@ export function postsToRankPayload(posts) {
   }));
 }
 
+let worker = null;
+let stdoutBuffer = "";
+let nextRequestId = 1;
+let exitHooked = false;
+const pending = new Map();
+
+function hookExit() {
+  if (exitHooked) return;
+  exitHooked = true;
+  process.on("exit", () => {
+    if (worker && !worker.killed) worker.kill();
+  });
+}
+
+function failPending(error) {
+  for (const item of pending.values()) {
+    clearTimeout(item.timer);
+    item.reject(error);
+  }
+  pending.clear();
+}
+
+function handleLine(line) {
+  let parsed;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return;
+  }
+  if (parsed.ready) {
+    console.log("Content ranker ready");
+    return;
+  }
+  const item = pending.get(parsed.request_id);
+  if (!item) return;
+  pending.delete(parsed.request_id);
+  clearTimeout(item.timer);
+  if (parsed.error) item.reject(new Error(parsed.error));
+  else item.resolve(parsed);
+}
+
+function ensureWorker() {
+  if (worker && worker.exitCode === null && !worker.killed) return worker;
+
+  stdoutBuffer = "";
+  const child = spawn(pythonCommand(), [RANK_SCRIPT, "--serve"], {
+    cwd: RANKER_ROOT,
+    windowsHide: true,
+    env: { ...process.env, PYTHONUNBUFFERED: "1", PYTHONWARNINGS: "ignore" },
+  });
+  worker = child;
+  hookExit();
+
+  let stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdoutBuffer += chunk.toString();
+    let newline = stdoutBuffer.indexOf("\n");
+    while (newline !== -1) {
+      const line = stdoutBuffer.slice(0, newline).trim();
+      stdoutBuffer = stdoutBuffer.slice(newline + 1);
+      if (line) handleLine(line);
+      newline = stdoutBuffer.indexOf("\n");
+    }
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr = (stderr + chunk.toString()).slice(-2000);
+  });
+  child.on("error", (error) => {
+    if (worker === child) worker = null;
+    failPending(error);
+  });
+  child.on("close", (code) => {
+    if (worker === child) worker = null;
+    failPending(new Error(stderr.trim() || `rank.py exited ${code}`));
+  });
+  return child;
+}
+
 function spawnRank(payload) {
   return new Promise((resolve, reject) => {
-    const child = spawn(pythonCommand(), [RANK_SCRIPT, "--stdin"], {
-      cwd: RANKER_ROOT,
-      windowsHide: true,
-    });
+    let child;
+    try {
+      child = ensureWorker();
+    } catch (error) {
+      reject(error);
+      return;
+    }
 
-    let stdout = "";
-    let stderr = "";
+    const requestId = nextRequestId++;
     const timer = setTimeout(() => {
-      child.kill();
+      if (!pending.has(requestId)) return;
+      pending.delete(requestId);
       reject(new Error("content ranker timed out"));
+      child.kill();
+      if (worker === child) worker = null;
     }, 8000);
 
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", (error) => {
+    pending.set(requestId, { resolve, reject, timer });
+    child.stdin.write(JSON.stringify({ ...payload, request_id: requestId }) + "\n", (error) => {
+      if (!error || !pending.has(requestId)) return;
       clearTimeout(timer);
+      pending.delete(requestId);
       reject(error);
     });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || `rank.py exited ${code}`));
-        return;
-      }
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (error) {
-        reject(new Error(`rank.py returned invalid JSON: ${stdout.slice(0, 200)}`));
-      }
-    });
-
-    child.stdin.write(JSON.stringify(payload));
-    child.stdin.end();
   });
+}
+
+export function warmContentRanker() {
+  if (!fs.existsSync(MODEL_PATH) || !fs.existsSync(RANK_SCRIPT)) return;
+  try {
+    ensureWorker();
+  } catch (error) {
+    console.warn("Content ranker warmup skipped:", error.message);
+  }
+}
+
+export function stopContentRanker() {
+  if (worker && !worker.killed) worker.kill();
+  worker = null;
+}
+
+const RANK_CACHE_TTL_MS = 60 * 1000;
+const RANK_CACHE_MAX = 100;
+const rankCache = new Map();
+
+function feedCacheKey(user, posts) {
+  let modelMtime = 0;
+  try {
+    modelMtime = fs.statSync(MODEL_PATH).mtimeMs;
+  } catch {
+    modelMtime = 0;
+  }
+  const postSig = posts
+    .map((post) =>
+      [
+        post._id,
+        daysAgo(post.createdAt),
+        post.caption || "",
+        post.trainer?._id || "",
+        post.trainer?.specialization || "",
+      ].join("|")
+    )
+    .join("\n");
+  return `${modelMtime}\n${user?._id || ""}\n${user?.trainer || ""}\n${postSig}`;
+}
+
+function cachedFeed(key, posts) {
+  const hit = rankCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > RANK_CACHE_TTL_MS) {
+    rankCache.delete(key);
+    return null;
+  }
+  const byId = new Map(posts.map((post) => [String(post._id), post]));
+  if (hit.rows.length !== posts.length || hit.rows.some((row) => !byId.has(row.id))) {
+    rankCache.delete(key);
+    return null;
+  }
+  rankCache.delete(key);
+  rankCache.set(key, hit);
+  return hit.rows.map((row) => ({ ...byId.get(row.id), rankScore: row.score }));
+}
+
+function storeFeed(key, rankedPosts) {
+  if (rankCache.has(key)) rankCache.delete(key);
+  rankCache.set(key, {
+    at: Date.now(),
+    rows: rankedPosts.map((post) => ({
+      id: String(post._id),
+      score: Number(post.rankScore) || 0,
+    })),
+  });
+  while (rankCache.size > RANK_CACHE_MAX) {
+    const oldest = rankCache.keys().next().value;
+    rankCache.delete(oldest);
+  }
 }
 
 export function applyRanking(posts, rankedRows) {
@@ -146,13 +282,19 @@ export async function rankClientFeed(user, posts) {
     return { posts, ranked: false };
   }
 
+  const key = feedCacheKey(user, posts);
+  const cached = cachedFeed(key, posts);
+  if (cached) return { posts: cached, ranked: true };
+
   try {
     const client = await buildClientFeatures(user);
     const result = await spawnRank({
       client,
       posts: postsToRankPayload(posts),
     });
-    return { posts: applyRanking(posts, result.posts), ranked: true };
+    const rankedPosts = applyRanking(posts, result.posts);
+    storeFeed(key, rankedPosts);
+    return { posts: rankedPosts, ranked: true };
   } catch (error) {
     console.warn("Content ranker skipped:", error.message);
     return { posts, ranked: false };

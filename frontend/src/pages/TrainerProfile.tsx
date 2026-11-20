@@ -163,7 +163,7 @@ const TrainerProfile = () => {
       case "pending":
       case "pending_sent":
         return (
-            <Button className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600" disabled>
+            <Button className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" disabled>
             <Clock className="w-4 h-4 mr-2" />
             Request Pending ⏳
           </Button>

@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import ThemeToggle from "@/components/ThemeToggle";
+import ScreenHeader from "@/components/layout/ScreenHeader";
 import { useAuth } from "@/context/AuthContext";
 
 const CreateSchedule = () => {
@@ -46,57 +44,17 @@ const CreateSchedule = () => {
     formData.title.trim() !== "" &&
     formData.description.trim() !== "" &&
     formData.numberOfDays !== "" &&
-    parseInt(formData.numberOfDays) > 0;
+    parseInt(formData.numberOfDays) > 0 &&
+    parseInt(formData.numberOfDays) <= 30; // the API accepts 1 to 30 days
 
   return (
     <div className="min-h-screen bg-background">
       {/* Back Button Header */}
-      <header className="p-4 md:p-6 flex items-center justify-between">
-        <Button
-          variant="ghost"
-          onClick={navigateToDashboard}
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-5 w-5 mr-2" />
-          Back
-        </Button>
-        <ThemeToggle />
-      </header>
+      <div className="mx-auto w-full max-w-md">
+      <ScreenHeader title="Plan setup" onBack={navigateToDashboard} />
 
-      <main className="px-4 md:px-6 pb-8 max-w-2xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="space-y-8"
-        >
-          {/* Header Section */}
-          <div className="text-center space-y-3">
-            <motion.h1
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-3xl md:text-4xl font-display font-bold text-foreground"
-            >
-              Let's Create Your Schedule
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.2 }}
-              className="text-muted-foreground"
-            >
-              Design your perfect workout plan
-            </motion.p>
-          </div>
-
-          {/* Form Section */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="glass-card p-6 md:p-8 rounded-2xl space-y-6"
-          >
+      <main className="px-5 pb-8">
+        <div className="space-y-4">
             {/* Schedule Title */}
             <div className="space-y-2">
               <Label htmlFor="title" className="text-foreground font-medium">
@@ -149,21 +107,16 @@ const CreateSchedule = () => {
             </div>
 
             {/* Continue Button */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
+            <Button
+              onClick={handleContinue}
+              disabled={!isFormValid}
+              className="h-12 w-full"
             >
-              <Button
-                onClick={handleContinue}
-                disabled={!isFormValid}
-                className="w-full h-12 text-lg font-semibold bg-primary hover:bg-primary/90 disabled:opacity-50"
-              >
-                Continue to Add Exercises
-              </Button>
-            </motion.div>
-          </motion.div>
-        </motion.div>
+              Continue to add exercises
+            </Button>
+        </div>
       </main>
+      </div>
     </div>
   );
 };

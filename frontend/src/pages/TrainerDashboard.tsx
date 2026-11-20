@@ -9,7 +9,6 @@ import {
   Users,
   Calendar,
   TrendingUp,
-  Settings,
   LogOut,
   ChevronRight,
   X,
@@ -17,24 +16,16 @@ import {
   UserPlus,
   MapPin,
   Target,
-  Dumbbell,
   CheckCircle2,
   Clock,
-  Building2,
   Loader2,
   Images,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +36,8 @@ import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import { getUserSchedules } from "@/api/schedules";
 import { getTrainerClients, getAllUsers, getTrainerFeedPosts } from "@/api/trainers";
+import { getAllConversations } from "@/api/messages";
+import { getUnreadCount as getUnreadNotificationCount } from "@/api/notifications";
 import ScheduleCard from "@/components/dashboard/ScheduleCard";
 import ContentFeed from "@/components/dashboard/ContentFeed";
 import {
@@ -77,11 +70,12 @@ const TrainerDashboard = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();  // ← ADDED logout
   
-  const [activeTab, setActiveTab] = useState<"clients" | "schedules" | "contents">("clients");
+  const [activeTab, setActiveTab] = useState<"clients" | "schedules" | "contents">("contents");
   const [feedPosts, setFeedPosts] = useState<any[]>([]);
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
-  const [notifications, setNotifications] = useState(3);
-  const [messages, setMessages] = useState(5);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const trainerName = user?.name || "";
   
   // Client states
   const [clientSearchQuery, setClientSearchQuery] = useState("");
@@ -90,24 +84,40 @@ const TrainerDashboard = () => {
   const [myClients, setMyClients] = useState<any[]>([]);  // ← NEW: Trainer's connected clients
   const [allUsers, setAllUsers] = useState<any[]>([]);  // ← NEW: All users in system
   const [isLoadingClients, setIsLoadingClients] = useState(false);  // ← NEW
-  const [pendingIncoming, setPendingIncoming] = useState(0);
   const [clientView, setClientView] = useState<"all" | "roster">("all");
 
   // Schedule states
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [isLoadingSchedules, setIsLoadingSchedules] = useState(false);
 
-  const [profile, setProfile] = useState({
-    name: user?.name || "Alex Trainer",
-    email: user?.email || "alex@fitpro.com",
-    avatar: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=150&h=150&fit=crop",  // Default until profile pic feature is added
-    followers: 1247,
-    certifications: ["NASM Certified", "CrossFit Level 2", "Nutrition Specialist"],
-    experienceYears: 8,
-    experienceLevel: 80,
-    specialty: "Strength & Conditioning",
-    bio: "Passionate about helping people achieve their fitness goals.",
-  });
+  // Header data: the trainer's own photo and real unread counts
+  useEffect(() => {
+    if (!user?._id) return;
+    let cancelled = false;
+
+    const loadHeader = async () => {
+      const [notificationCount, conversationData] = await Promise.allSettled([
+        getUnreadNotificationCount(),
+        getAllConversations(),
+      ]);
+      if (cancelled) return;
+
+      if (notificationCount.status === "fulfilled") {
+        setUnreadNotifications(Number(notificationCount.value) || 0);
+      }
+      if (conversationData.status === "fulfilled") {
+        const conversations = conversationData.value?.conversations || [];
+        setUnreadMessages(
+          conversations.reduce((sum: number, c: any) => sum + (Number(c.unreadCount) || 0), 0)
+        );
+      }
+    };
+
+    loadHeader();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?._id]);
 
   // ========== NEW: Fetch trainer's clients and all users ==========
   const fetchClients = async () => {
@@ -145,7 +155,6 @@ const TrainerDashboard = () => {
       
       setMyClients(connectedClients);
       setAllUsers(usersWithStatus);
-      setPendingIncoming((overview.incoming || []).length);
       
     } catch (error: any) {
       console.error('Error fetching clients:', error);
@@ -214,11 +223,6 @@ const TrainerDashboard = () => {
     if (clientView === "roster") return Boolean(client.isConnected);
     return true;
   });
-
-  const plansThisWeek = schedules.filter((schedule) => {
-    const created = new Date(schedule.createdAt).getTime();
-    return Date.now() - created <= 7 * 24 * 60 * 60 * 1000;
-  }).length;
 
   const handleCreateSchedule = () => {
     navigate("/schedule/create");
@@ -290,257 +294,71 @@ const TrainerDashboard = () => {
   };
 
   return (
-    <div className={`min-h-screen overflow-x-hidden ${activeTab === "contents" ? "bg-[#F0F2F5] dark:bg-background" : "bg-background"}`}>
+    <div className="min-h-screen overflow-x-hidden bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
-        <div className="flex items-center justify-between p-4 max-w-7xl mx-auto">
-          <div>
-            <h1 className="text-2xl font-heading gradient-text">TRAINER HUB</h1>
-            <p className="text-sm text-muted-foreground">Welcome back, {profile.name}</p>
+      <header className="sticky top-0 z-30 bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-5 py-4">
+          <div className="min-w-0">
+            <h1 className="truncate font-heading text-lg font-bold text-foreground">
+              {trainerName || "Trainer hub"}
+            </h1>
+            <p className="truncate text-xs text-primary">
+              {myClients.length} clients
+              {unreadMessages > 0 ? ` · ${unreadMessages} unread` : ""}
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            {/* Messages Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/trainer/messages")}
-              className="relative h-11 w-11 rounded-full bg-card hover:bg-primary/20 border border-border"
-            >
-              <MessageSquare className="h-5 w-5 text-foreground" />
-              {messages > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-primary text-[10px] font-bold flex items-center justify-center text-primary-foreground">
-                  {messages}
-                </span>
-              )}
-            </Button>
-
-            {/* Notifications Button */}
+          <div className="flex shrink-0 items-center gap-2">
+            <ThemeToggle className="h-11 w-11 rounded-2xl border border-border bg-card" />
             <Button
               variant="ghost"
               size="icon"
               onClick={() => navigate("/trainer/notifications")}
-              className="relative h-11 w-11 rounded-full bg-card hover:bg-primary/20 border border-border"
+              className="relative h-11 w-11 rounded-2xl border border-border bg-card"
+              aria-label={
+                unreadNotifications > 0 ? `Notifications, ${unreadNotifications} unread` : "Notifications"
+              }
             >
               <Bell className="h-5 w-5 text-foreground" />
-              {notifications > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-accent text-[10px] font-bold flex items-center justify-center text-accent-foreground">
-                  {notifications}
-                </span>
+              {unreadNotifications > 0 && (
+                <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background" />
               )}
             </Button>
-
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate("/trainer/me")}
-              className="h-11 w-11 rounded-full overflow-hidden border-2 border-primary p-0"
-              title="My profile"
+              onClick={handleLogout}
+              className="h-11 w-11 rounded-2xl border border-border bg-card text-destructive"
+              aria-label="Log out"
             >
-              <Avatar className="h-full w-full">
-                <AvatarImage src={profile.avatar} alt={profile.name} />
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  {profile.name.charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              <LogOut className="h-5 w-5" />
             </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11 rounded-full bg-card hover:bg-primary/20 border border-border"
-                  title="Settings"
-                >
-                  <Settings className="h-5 w-5 text-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem
-                  className="cursor-pointer text-destructive focus:text-destructive"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="p-4 md:p-6 max-w-7xl mx-auto pb-24">
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="glass-card border-primary/20 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
-              <CardContent className="p-4 relative">
-                <Users className="h-8 w-8 text-primary mb-2" />
-                <p className="text-3xl font-bold text-foreground">{myClients.length}</p>
-                <p className="text-sm text-muted-foreground">Active Clients</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="glass-card border-accent/20 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent" />
-              <CardContent className="p-4 relative">
-                <Calendar className="h-8 w-8 text-accent mb-2" />
-                <p className="text-3xl font-bold text-foreground">{schedules.length}</p>
-                <p className="text-sm text-muted-foreground">Schedules</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="glass-card border-primary/20 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent" />
-              <CardContent className="p-4 relative">
-                <Clock className="h-8 w-8 text-primary mb-2" />
-                <p className="text-3xl font-bold text-foreground">{pendingIncoming}</p>
-                <p className="text-sm text-muted-foreground">Pending requests</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Card className="glass-card border-accent/20 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-accent/10 to-transparent" />
-              <CardContent className="p-4 relative">
-                <TrendingUp className="h-8 w-8 text-accent mb-2" />
-                <p className="text-3xl font-bold text-foreground">{plansThisWeek}</p>
-                <p className="text-sm text-muted-foreground">Plans this week</p>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Gym Action Buttons */}
-                {/* Gym & Exercise Management Section */}
-        <div className="mb-6 space-y-4">
-          {/* Gym Management Card */}
-          <Card className="glass-card border-primary/20 overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                    <Building2 className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Client roster</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {myClients.length} connected {myClients.length === 1 ? "client" : "clients"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setActiveTab("clients");
-                      setClientView("roster");
-                    }}
-                    className="border-primary/50 text-foreground hover:bg-primary/20 flex items-center gap-2"
-                  >
-                    <Users className="h-4 w-4" />
-                    Connected clients
-                  </Button>
-                  <Button
-                    onClick={() => navigate("/trainer/gym")}
-                    className="bg-gradient-to-r from-primary to-accent text-primary-foreground hover:opacity-90 flex items-center gap-2 shadow-glow"
-                  >
-                    <Building2 className="h-4 w-4" />
-                    Open roster
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Exercise Management Card */}
-          <Card className="glass-card border-accent/20 overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-accent to-primary flex items-center justify-center">
-                    <Dumbbell className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-foreground">Exercise Library</h3>
-                    <p className="text-sm text-muted-foreground">Manage exercises and video tutorials</p>
-                  </div>
-                </div>
-                <Button
-                  onClick={() => navigate("/exercises/manage")}
-                  className="bg-gradient-to-r from-accent to-primary text-primary-foreground hover:opacity-90 flex items-center gap-2 shadow-glow"
-                >
-                  <Dumbbell className="h-4 w-4" />
-                  Manage Exercises
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
+      <main className="mx-auto w-full max-w-md p-5">
         {/* Tab Buttons */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <Button
-            variant={activeTab === "clients" ? "default" : "outline"}
-            onClick={() => setActiveTab("clients")}
-            className={`flex items-center gap-2 ${
-              activeTab === "clients"
-                ? "bg-primary text-primary-foreground shadow-glow"
-                : "border-primary/50 text-foreground hover:bg-primary/20"
-            }`}
-          >
-            <Users className="h-4 w-4" />
-            Clients
-          </Button>
-          <Button
-            variant={activeTab === "schedules" ? "default" : "outline"}
-            onClick={() => setActiveTab("schedules")}
-            className={`flex items-center gap-2 ${
-              activeTab === "schedules"
-                ? "bg-primary text-primary-foreground shadow-glow"
-                : "border-primary/50 text-foreground hover:bg-primary/20"
-            }`}
-          >
-            <Calendar className="h-4 w-4" />
-            Schedules
-          </Button>
-          <Button
-            variant={activeTab === "contents" ? "default" : "outline"}
-            onClick={() => setActiveTab("contents")}
-            className={`flex items-center gap-2 ${
-              activeTab === "contents"
-                ? "bg-primary text-primary-foreground shadow-glow"
-                : "border-primary/50 text-foreground hover:bg-primary/20"
-            }`}
-          >
-            <Images className="h-4 w-4" />
-            Contents
-          </Button>
+        <div className="mb-5 flex gap-2">
+          {([
+            ["contents", "Contents"],
+            ["clients", "Clients"],
+            ["schedules", "Plans"],
+          ] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`rounded-xl px-4 py-2 text-xs font-semibold ${
+                activeTab === id
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-muted-foreground"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {/* Content */}
@@ -671,9 +489,22 @@ const TrainerDashboard = () => {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <div className="mb-6">
-                <h2 className="font-heading text-xl text-foreground">Created schedules</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Open a plan to review each day’s workout.</p>
+              <div className="mb-6 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="font-heading text-xl text-foreground">Created schedules</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">Open a plan to review each day’s workout.</p>
+                </div>
+                {/* On phones the floating button would cover the tabs, so the action lives here.
+                    The empty state below already has its own create button. */}
+                {schedules.length > 0 && (
+                  <Button
+                    onClick={handleCreateSchedule}
+                    className="shrink-0 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 sm:hidden"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    New
+                  </Button>
+                )}
               </div>
               
               {isLoadingSchedules ? (
@@ -714,6 +545,7 @@ const TrainerDashboard = () => {
                         exerciseCount={getTotalExercises(schedule)}
                         owner="You"
                         isOwnSchedule
+                        createdAt={schedule.createdAt}
                         onClick={() => handleScheduleClick(schedule)}
                       />
                     </motion.div>
@@ -877,7 +709,7 @@ const TrainerDashboard = () => {
         <motion.div
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          className="fixed bottom-6 right-6"
+          className="fixed bottom-6 right-6 hidden sm:block"
         >
           <Button
             size="lg"

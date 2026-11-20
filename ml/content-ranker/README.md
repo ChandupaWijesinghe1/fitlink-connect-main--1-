@@ -40,7 +40,7 @@ python rank.py --specialty yoga --top 5
 
 The JSON list is the filtered Contents feed for that client.
 
-The FitConnect backend ranks a **client** Contents feed by spawning `rank.py --stdin` with live Mongo posts. The Node API does not hard-code scores. Each request loads `models/content_ranker.joblib` from disk, so `python train.py` is enough to update ranking.
+The FitConnect backend ranks a **client** Contents feed by keeping one `rank.py --serve` process alive. The model is loaded once at startup and reloaded when `python train.py` replaces `models/content_ranker.joblib`.
 
 If Python or the model file is missing, the feed falls back to newest-first.
 

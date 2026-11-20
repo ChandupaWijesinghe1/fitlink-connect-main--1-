@@ -2,13 +2,17 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
+import helmet from "helmet";
 import { createServer } from "http";
 import { Server } from "socket.io";
 
 // Import models
-import Trainer from "./models/Trainer.js";
 import User from './models/User.js';
-import Message from './models/Message.js';
+
+// Auth, validation and real-time helpers
+import { protect, requireSelf } from "./middleware/authMiddleware.js";
+import { validateIdParam } from "./middleware/validators.js";
+import { getActiveUserCount, registerSocketHandlers } from "./socket/index.js";
 
 // Import your existing auth routes
 import authRoutes from "./routes/authRoutes.js";
@@ -22,6 +26,7 @@ import notificationRoutes from './routes/Notificationroutes.js';
 import messageRoutes from './routes/messageRoutes.js';
 import trainerRoutes from './routes/trainerRoutes.js';
 import progressRoutes from './routes/progressRoutes.js';
+import { stopContentRanker, warmContentRanker } from './utils/contentRanker.js';
 
 dotenv.config();
 
@@ -34,6 +39,14 @@ console.log('🔍 PORT:', process.env.PORT || 5000);
 const app = express();
 const httpServer = createServer(app);
 
+// When the API runs behind a reverse proxy (Render, Railway, Nginx...), set
+// TRUST_PROXY=1 so the login rate limit counts each visitor's own IP address
+// instead of the proxy's.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set('trust proxy', Number.isNaN(hops) ? process.env.TRUST_PROXY : hops);
+}
+
 // Determine allowed origins based on environment
 const allowedOrigins = [
   'http://localhost:3000',
@@ -45,13 +58,18 @@ const allowedOrigins = [
   'https://fitlink-connect-efac.vercel.app'
 ];
 
+// A real localhost origin such as http://localhost:8080 (not just any URL containing the word)
+const LOCALHOST_ORIGIN = /^https?:\/\/localhost(:\d+)?$/;
+const isAllowedOrigin = (origin) =>
+  !origin || LOCALHOST_ORIGIN.test(origin) || allowedOrigins.includes(origin);
+
 // Socket.io setup with CORS
 const io = new Server(httpServer, {
   cors: {
-    origin: function (origin) {
-      // Allow localhost in development
-      if (!origin || origin.includes('localhost')) return true;
-      return allowedOrigins.includes(origin);
+    // The result must go through the callback: returning a value here leaves
+    // every Socket.io handshake hanging.
+    origin: function (origin, callback) {
+      callback(null, isAllowedOrigin(origin));
     },
     methods: ['GET', 'POST'],
     credentials: true
@@ -59,6 +77,9 @@ const io = new Server(httpServer, {
 });
 
 // ==================== MIDDLEWARE - CORRECT ORDER! ====================
+// Security headers (also removes the X-Powered-By header)
+app.use(helmet());
+
 // Enable CORS
 app.use(cors({
   origin: function (origin, callback) {
@@ -66,7 +87,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     
     // Allow all localhost origins in development
-    if (origin.includes('localhost')) {
+    if (LOCALHOST_ORIGIN.test(origin)) {
       return callback(null, true);
     }
     
@@ -91,147 +112,19 @@ app.use(express.urlencoded({ extended: true, limit: "8mb" }));
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
     console.log(`📥 ${req.method} ${req.path}`);
-    const bodyPreview = req.body && JSON.stringify(req.body).length > 500
+    let bodyPreview = req.body && JSON.stringify(req.body).length > 500
       ? '[large payload omitted]'
       : req.body;
+    // Login and signup bodies contain passwords, so they are never logged
+    if (req.path.startsWith('/api/auth')) bodyPreview = '[hidden]';
     console.log('📦 Body:', bodyPreview);
     console.log('📋 Headers:', req.headers['content-type']);
     next();
   });
 }
 
-// Store active users with their socket IDs
-const activeUsers = new Map();
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  console.log('🔌 New socket connection:', socket.id);
-
-  socket.on('user:join', (userId) => {
-    activeUsers.set(userId, socket.id);
-    console.log(`✅ User ${userId} joined with socket ${socket.id}`);
-    console.log(`👥 Active users: ${activeUsers.size}`);
-  });
-
-  socket.on('message:send', async (data) => {
-    try {
-      const { senderId, senderType, receiverId, receiverType, message } = data;
-
-      const SenderModel = senderType === 'Trainer' ? Trainer : User;
-      const sender = await SenderModel.findById(senderId);
-      
-      if (!sender) {
-        socket.emit('message:error', { error: 'Sender not found' });
-        return;
-      }
-
-      const ReceiverModel = receiverType === 'Trainer' ? Trainer : User;
-      const receiver = await ReceiverModel.findById(receiverId);
-      
-      if (!receiver) {
-        socket.emit('message:error', { error: 'Receiver not found' });
-        return;
-      }
-
-      const conversationId = Message.generateConversationId(senderId, receiverId);
-
-      const newMessage = new Message({
-        conversationId,
-        sender: {
-          id: senderId,
-          type: senderType,
-          name: sender.name
-        },
-        receiver: {
-          id: receiverId,
-          type: receiverType,
-          name: receiver.name
-        },
-        message: message.trim()
-      });
-
-      await newMessage.save();
-      socket.emit('message:sent', newMessage);
-
-      const receiverSocketId = activeUsers.get(receiverId);
-      if (receiverSocketId) {
-        io.to(receiverSocketId).emit('message:receive', newMessage);
-        console.log(`📨 Message delivered to ${receiverId}`);
-      } else {
-        console.log(`📭 Receiver ${receiverId} is offline`);
-      }
-
-    } catch (error) {
-      console.error('Socket message error:', error);
-      socket.emit('message:error', { error: error.message });
-    }
-  });
-
-  socket.on('message:markRead', async (data) => {
-    try {
-      const { conversationId, userId } = data;
-
-      await Message.updateMany(
-        {
-          conversationId,
-          'receiver.id': userId,
-          isRead: false
-        },
-        {
-          $set: {
-            isRead: true,
-            readAt: new Date()
-          }
-        }
-      );
-
-      const messages = await Message.find({ conversationId }).sort({ createdAt: -1 }).limit(1);
-      if (messages.length > 0) {
-        const otherUserId = messages[0].sender.id.toString() === userId 
-          ? messages[0].receiver.id.toString() 
-          : messages[0].sender.id.toString();
-        
-        const otherUserSocketId = activeUsers.get(otherUserId);
-        if (otherUserSocketId) {
-          io.to(otherUserSocketId).emit('message:read', { conversationId, userId });
-        }
-      }
-
-    } catch (error) {
-      console.error('Mark read error:', error);
-      socket.emit('message:error', { error: error.message });
-    }
-  });
-
-  socket.on('user:typing', (data) => {
-    const { senderId, receiverId } = data;
-    const receiverSocketId = activeUsers.get(receiverId);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user:typing', { senderId });
-    }
-  });
-
-  socket.on('user:stopTyping', (data) => {
-    const { senderId, receiverId } = data;
-    const receiverSocketId = activeUsers.get(receiverId);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user:stopTyping', { senderId });
-    }
-  });
-
-  socket.on('disconnect', () => {
-    for (const [userId, socketId] of activeUsers.entries()) {
-      if (socketId === socket.id) {
-        activeUsers.delete(userId);
-        console.log(`👋 User ${userId} disconnected`);
-        break;
-      }
-    }
-    console.log(`👥 Active users: ${activeUsers.size}`);
-  });
-});
+// Socket.io: connections are authenticated with the login token (see socket/index.js)
+registerSocketHandlers(io);
 
 // HEALTH CHECK
 app.get('/api/health', (req, res) => {
@@ -239,13 +132,13 @@ app.get('/api/health', (req, res) => {
     status: 'OK', 
     message: 'Fitness App Backend is running',
     timestamp: new Date().toISOString(),
-    activeUsers: activeUsers.size,
+    activeUsers: getActiveUserCount(),
     environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// Get connected trainers for a user
-app.get('/api/user/my-trainers/:userId', async (req, res) => {
+// Get connected trainers for a user - own account only
+app.get('/api/user/my-trainers/:userId', protect, validateIdParam('userId'), requireSelf('userId'), async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -341,6 +234,7 @@ mongoose.connect(process.env.MONGODB_URI)
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('👋 SIGTERM received, closing HTTP server');
+  stopContentRanker();
   httpServer.close(() => {
     console.log('💤 HTTP server closed');
     mongoose.connection.close(false, () => {
@@ -353,6 +247,7 @@ process.on('SIGTERM', () => {
 // Start Server with Socket.io
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, '0.0.0.0', () => {
+  warmContentRanker();
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔌 Socket.io ready for real-time messaging`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);

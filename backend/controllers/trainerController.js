@@ -1,5 +1,6 @@
 import Trainer from '../models/Trainer.js';
 import { rankClientFeed } from '../utils/contentRanker.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Get all trainers
 export const getAllTrainers = async (req, res) => {
@@ -26,9 +27,10 @@ export const getAllTrainers = async (req, res) => {
 // Get single trainer by ID
 export const getTrainerById = async (req, res) => {
   try {
+    // clients stays a list of ids here: the profile page only shows the count,
+    // and client names and emails are private to the trainer (see /:id/clients)
     const trainer = await Trainer.findById(req.params.id)
-      .select('-password')
-      .populate('clients', 'name email'); // Populate client info if needed
+      .select('-password');
 
     if (!trainer) {
       return res.status(404).json({
@@ -56,18 +58,19 @@ export const searchTrainers = async (req, res) => {
   try {
     const { query } = req.query;
 
-    if (!query) {
+    if (!query || typeof query !== 'string' || query.length > 100) {
       return res.status(400).json({
         success: false,
         message: 'Search query is required'
       });
     }
 
+    const pattern = escapeRegex(query);
     const trainers = await Trainer.find({
       isActive: true,
       $or: [
-        { name: { $regex: query, $options: 'i' } },
-        { specialization: { $regex: query, $options: 'i' } }
+        { name: { $regex: pattern, $options: 'i' } },
+        { specialization: { $regex: pattern, $options: 'i' } }
       ]
     }).select('-password');
 

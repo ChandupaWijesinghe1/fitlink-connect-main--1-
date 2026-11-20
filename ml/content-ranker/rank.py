@@ -1,7 +1,7 @@
 """Rank trainer posts for one client. This is the only job of the model.
 
-The trained file is loaded from disk on every run so retraining
-(models/content_ranker.joblib) is picked up without changing Node code.
+`--serve` keeps one process alive and reloads the joblib file only when
+`python train.py` replaces it.
 """
 
 from __future__ import annotations
@@ -56,9 +56,13 @@ def feature_frame(client: dict, posts: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def rank_for_client(client: dict, posts: pd.DataFrame | None = None, top_k: int | None = None) -> pd.DataFrame:
-    model, features = load_model()
-    posts = posts if posts is not None else pd.read_csv(POSTS_PATH)
+def rank_frame(
+    client: dict,
+    posts: pd.DataFrame,
+    model,
+    features: list[str],
+    top_k: int | None = None,
+) -> pd.DataFrame:
     if posts.empty:
         return pd.DataFrame(columns=["post_id", "trainer_name", "caption", "score"])
     frame = feature_frame(client, posts)
@@ -69,22 +73,59 @@ def rank_for_client(client: dict, posts: pd.DataFrame | None = None, top_k: int 
     return ranked
 
 
+def rank_for_client(client: dict, posts: pd.DataFrame | None = None, top_k: int | None = None) -> pd.DataFrame:
+    model, features = load_model()
+    posts = posts if posts is not None else pd.read_csv(POSTS_PATH)
+    return rank_frame(client, posts, model, features, top_k)
+
+
 def posts_from_payload(payload: dict) -> pd.DataFrame:
     return pd.DataFrame(payload.get("posts") or [])
 
 
-def rank_payload(payload: dict) -> dict:
+def rank_payload(payload: dict, model=None, features: list[str] | None = None) -> dict:
+    if model is None or features is None:
+        model, features = load_model()
     client = payload.get("client") or {}
     posts = posts_from_payload(payload)
     top = payload.get("top")
-    ranked = rank_for_client(client, posts=posts, top_k=top)
-    return {
+    ranked = rank_frame(client, posts, model, features, top)
+    result = {
         "client": {
             "preferred_specialty": client.get("preferred_specialty"),
             "connected_trainer_id": client.get("connected_trainer_id", ""),
         },
         "posts": ranked[["post_id", "score"]].to_dict(orient="records"),
     }
+    if "request_id" in payload:
+        result["request_id"] = payload["request_id"]
+    return result
+
+
+def serve() -> None:
+    """Score many feeds in one process. One JSON object per line, in and out."""
+    model, features = load_model()
+    loaded_mtime = MODEL_PATH.stat().st_mtime
+    sys.stdout.write(json.dumps({"ready": True}) + "\n")
+    sys.stdout.flush()
+
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        request_id = None
+        try:
+            mtime = MODEL_PATH.stat().st_mtime
+            if mtime != loaded_mtime:
+                model, features = load_model()
+                loaded_mtime = mtime
+            payload = json.loads(line)
+            request_id = payload.get("request_id")
+            result = rank_payload(payload, model, features)
+        except Exception as exc:
+            result = {"request_id": request_id, "error": str(exc)}
+        sys.stdout.write(json.dumps(result, default=str) + "\n")
+        sys.stdout.flush()
 
 
 def main() -> None:
@@ -92,8 +133,13 @@ def main() -> None:
     parser.add_argument("--client-id", default="c001")
     parser.add_argument("--specialty", default="")
     parser.add_argument("--top", type=int, default=None)
-    parser.add_argument("--stdin", action="store_true", help="Rank JSON {client, posts} from stdin")
+    parser.add_argument("--stdin", action="store_true", help="Rank one JSON {client, posts} from stdin")
+    parser.add_argument("--serve", action="store_true", help="Keep running and rank one JSON object per line")
     args = parser.parse_args()
+
+    if args.serve:
+        serve()
+        return
 
     if args.stdin:
         payload = json.load(sys.stdin)

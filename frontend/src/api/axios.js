@@ -23,4 +23,18 @@ API.interceptors.request.use(
   }
 );
 
+// When the API says the token is missing, invalid or expired, end the session.
+// AuthContext listens for this event, logs out, and the route guards send the
+// user to the login page. Login and signup requests are left alone.
+API.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = error.config?.url || '';
+    if (error.response?.status === 401 && !url.startsWith('/auth/')) {
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default API;

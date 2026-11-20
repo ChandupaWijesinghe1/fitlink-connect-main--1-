@@ -1,6 +1,5 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { motion } from "framer-motion";
-import { Calendar, Dumbbell, Trash2, ChevronRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { CalendarDays, ChevronRight, Dumbbell, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ScheduleCardProps {
@@ -11,84 +10,92 @@ interface ScheduleCardProps {
   exerciseCount?: number;
   owner: string;
   isOwnSchedule: boolean;
+  createdAt?: string;
   onClick: (id: string) => void;
   onDelete?: (id: string) => void;
 }
+
+const isObjectId = (value: string) => /^[a-f\d]{24}$/i.test(value.trim());
+
+const formatCreated = (value?: string) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+};
 
 const ScheduleCard = ({
   id,
   title,
   description,
   numberOfDays,
-  exerciseCount,
+  exerciseCount = 0,
   owner,
   isOwnSchedule,
+  createdAt,
   onClick,
   onDelete,
 }: ScheduleCardProps) => {
+  const days = Math.max(0, numberOfDays);
+  const createdLabel = formatCreated(createdAt);
+  const sourceLabel = isOwnSchedule
+    ? "Your plan"
+    : owner && !isObjectId(owner)
+      ? owner
+      : "From trainer";
+
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete?.(id);
   };
 
   return (
-    <motion.div
-      whileHover={{ y: -4 }}
-      whileTap={{ scale: 0.99 }}
-      transition={{ duration: 0.2, ease: "easeOut" }}
+    <Card
+      className="cursor-pointer p-4 transition active:scale-[0.99] hover:border-primary/40"
+      onClick={() => onClick(id)}
     >
-      <Card
-        className="group cursor-pointer overflow-hidden rounded-3xl border-border/70 bg-card hover:border-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all duration-300"
-        onClick={() => onClick(id)}
-      >
-        <CardContent className="p-0">
-          <div className="h-1 bg-gradient-to-r from-primary via-accent to-primary" />
-          <div className="p-5">
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-md">
-                <Calendar className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h3 className="truncate text-lg font-heading text-foreground group-hover:text-primary transition-colors">
-                  {title}
-                </h3>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                  {description || "Workout plan"}
-                </p>
-              </div>
-              {isOwnSchedule && onDelete ? (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleDelete}
-                  className="h-8 w-8 shrink-0 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              ) : (
-                <ChevronRight className="mt-1 h-5 w-5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
-              )}
+      <div className="flex items-start gap-3">
+        <div className="icon-chip shrink-0">
+          <CalendarDays className="h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">{sourceLabel}</p>
+              <h3 className="truncate font-heading text-base text-foreground">{title}</h3>
             </div>
-
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                <Calendar className="h-3.5 w-3.5 text-primary" />
-                {numberOfDays} {numberOfDays === 1 ? "day" : "days"}
-              </span>
-              {exerciseCount != null && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs font-medium text-foreground">
-                  <Dumbbell className="h-3.5 w-3.5 text-accent" />
-                  {exerciseCount} exercises
-                </span>
-              )}
-              <span className="ml-auto text-xs text-muted-foreground">
-                {isOwnSchedule ? "Created by you" : owner || "Trainer plan"}
-              </span>
-            </div>
+            {isOwnSchedule && onDelete ? (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleDelete}
+                aria-label="Delete schedule"
+                className="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ) : (
+              <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
+            )}
           </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {description || "A workout plan you can follow day by day."}
+          </p>
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
+              {days} {days === 1 ? "day" : "days"}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">
+              <Dumbbell className="h-3 w-3 text-primary" />
+              {exerciseCount}
+            </span>
+            <span className="ml-auto">
+              {createdLabel ? createdLabel : "Open"}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Card>
   );
 };
 

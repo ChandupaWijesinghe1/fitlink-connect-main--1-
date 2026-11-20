@@ -22,6 +22,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const clearStoredSession = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  localStorage.removeItem('userType');
+};
+
+// Reads the expiry time (in ms) from a login token. The server still verifies the
+// token on every request; this only lets the UI notice that a session has ended.
+const getTokenExpiry = (token: string): number | null => {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const { exp } = JSON.parse(atob(payload));
+    return typeof exp === 'number' ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+};
+
+const isTokenExpired = (token: string) => {
+  const expiry = getTokenExpiry(token);
+  return expiry !== null && expiry <= Date.now();
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -34,10 +57,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const storedUser = localStorage.getItem('user');
     const storedUserType = localStorage.getItem('userType');
 
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      setUserType(storedUserType as 'client' | 'trainer');
+    try {
+      const validType = storedUserType === 'client' || storedUserType === 'trainer';
+      if (storedToken && storedUser && validType && !isTokenExpired(storedToken)) {
+        setUser(JSON.parse(storedUser));
+        setToken(storedToken);
+        setUserType(storedUserType);
+      } else {
+        // Missing, expired or incomplete session: start logged out
+        clearStoredSession();
+      }
+    } catch {
+      clearStoredSession();
     }
     setIsLoading(false);
   }, []);
@@ -94,10 +125,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setToken(null);
     setUserType(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('userType');
+    clearStoredSession();
   };
+
+  // Log out when the token runs out, or when the API rejects it (see api/axios.js)
+  useEffect(() => {
+    if (!token) return;
+
+    const expiry = getTokenExpiry(token);
+    const timer =
+      expiry === null
+        ? undefined
+        : window.setTimeout(logout, Math.min(Math.max(expiry - Date.now(), 0), 2_000_000_000));
+
+    window.addEventListener('auth:unauthorized', logout);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('auth:unauthorized', logout);
+    };
+  }, [token]);
 
   return (
     <AuthContext.Provider value={{ user, token, userType, isLoading, login, signup, logout }}>

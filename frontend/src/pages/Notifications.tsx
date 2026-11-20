@@ -154,9 +154,9 @@ const Notifications = () => {
       case "connection_accepted":
         return "from-green-500 to-emerald-500";
       case "connection_declined":
-        return "from-red-500 to-orange-500";
+        return "from-rose-700 to-rose-500";
       case "schedule":
-        return "from-orange-500 to-yellow-500";
+        return "from-emerald-700 to-emerald-500";
       case "system":
         return "from-emerald-500 to-teal-500";
       default:
@@ -299,50 +299,27 @@ const Notifications = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-20 left-10 w-72 h-72 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute bottom-20 right-10 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-cyan-500/5 rounded-full blur-3xl" />
-      </div>
 
       {/* Header */}
-      <header className="relative z-10 sticky top-0 bg-background/80 backdrop-blur-xl border-b border-border">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(backPath)}
-                className="text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <div className="p-2 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 shadow-lg shadow-purple-500/25">
-                    <Bell className="h-6 w-6 text-white" />
-                  </div>
-                  {unreadCount > 0 && (
-                    <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center"
-                    >
-                      <span className="text-xs text-white font-bold">
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    </motion.div>
-                  )}
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-foreground">Notifications</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {unreadCount > 0 ? `${unreadCount} unread` : "All caught up!"}
-                  </p>
-                </div>
-              </div>
+      <div className="mx-auto w-full max-w-md">
+      <header className="px-5 pt-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => navigate(backPath)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card"
+              aria-label="Back"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <div>
+              <h1 className="font-heading text-xl font-bold text-foreground">Notifications</h1>
+              <p className="text-xs text-muted-foreground">
+                {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+              </p>
             </div>
+          </div>
 
             <div className="flex items-center gap-2">
               <ThemeToggle className="h-10 w-10" />
@@ -410,28 +387,27 @@ const Notifications = () => {
               </DropdownMenu>
             </div>
           </div>
-        </div>
       </header>
 
       {/* Content */}
-      <main className="relative z-10 container mx-auto px-4 py-6">
+      <main className="px-5 py-4">
         <Tabs defaultValue="all" className="w-full">
           <TabsList className="w-full mb-6 bg-muted border border-border p-1 rounded-2xl">
             <TabsTrigger
               value="all"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-muted-foreground"
+              className="flex-1 rounded-xl text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               All ({filteredNotifications.length})
             </TabsTrigger>
             <TabsTrigger
               value="messages"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white text-muted-foreground"
+              className="flex-1 rounded-xl text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               Messages ({filteredNotifications.filter(n => n.type === "message").length})
             </TabsTrigger>
             <TabsTrigger
               value="connections"
-              className="flex-1 rounded-xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-500 data-[state=active]:to-pink-500 data-[state=active]:text-white text-muted-foreground"
+              className="flex-1 rounded-xl text-muted-foreground data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               Connections ({filteredNotifications.filter(n => 
                 n.type === "connection" || 
@@ -509,6 +485,7 @@ const Notifications = () => {
           )}
         </Tabs>
       </main>
+      </div>
     </div>
   );
 };

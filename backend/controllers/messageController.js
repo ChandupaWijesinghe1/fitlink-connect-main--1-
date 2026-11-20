@@ -2,6 +2,9 @@ import Message from '../models/Message.js';
 import User from '../models/User.js';
 import Trainer from '../models/Trainer.js';
 import Notification from '../models/Notifications.js';
+import Schedule from '../models/Schedules.js';
+import { isScheduleOwner } from '../utils/scheduleAccess.js';
+import { emitToUser } from '../socket/index.js';
 
 // Generate conversation ID (consistent for both participants)
 const generateConversationId = (userId1, userId2) => {
@@ -46,8 +49,20 @@ const createMessageNotification = async (sender, receiver, messageContent, messa
 // Share a schedule via message
 export const shareSchedule = async (req, res) => {
   try {
-    const { receiverId, scheduleId, scheduleTitle, scheduleDays } = req.body;
+    const { receiverId, scheduleId } = req.body;
     const senderId = req.user._id;
+
+    // Sharing gives the receiver access to the schedule, so only its owner may share it.
+    // The title and day count come from the stored schedule, not from the request.
+    const schedule = await Schedule.findById(scheduleId).select('title days userId');
+    if (!schedule) {
+      return res.status(404).json({ message: 'Schedule not found' });
+    }
+    if (!isScheduleOwner(schedule, req.user)) {
+      return res.status(403).json({ message: 'You can only share your own schedules' });
+    }
+    const scheduleTitle = schedule.title;
+    const scheduleDays = schedule.days.length;
 
     // Determine sender type and get full details
     const senderTrainer = await Trainer.findById(senderId);
@@ -114,6 +129,9 @@ export const shareSchedule = async (req, res) => {
       messageContent,
       message._id
     );
+
+    // Deliver in real time if the receiver is online
+    emitToUser(receiverId, 'message:receive', message);
 
     res.status(201).json({
       success: true,
@@ -193,6 +211,9 @@ export const sendMessage = async (req, res) => {
       content.trim(),
       message._id
     );
+
+    // Deliver in real time if the receiver is online
+    emitToUser(receiverId, 'message:receive', message);
 
     res.status(201).json({
       success: true,

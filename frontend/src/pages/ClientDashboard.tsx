@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Search, Loader2, Users, Calendar, Star, Award, UserPlus, Dumbbell, ChevronRight, Images } from "lucide-react";
+import { Plus, Search, Loader2, Users, Calendar, Star, Award, UserPlus, Dumbbell, MessageSquare, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import ScheduleCard from "@/components/dashboard/ScheduleCard";
 import ContentFeed from "@/components/dashboard/ContentFeed";
+import ScreenHeader from "@/components/layout/ScreenHeader";
+import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/context/AuthContext";
 import { getUserSchedules, deleteSchedule } from "@/api/schedules";
 import { getAllTrainers, searchTrainers, getTrainerById, getTrainerFeedPosts } from "@/api/trainers";
@@ -37,7 +38,6 @@ const ClientDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const [activeTab, setActiveTab] = useState<"schedules" | "instructors">("instructors");
   const [searchQuery, setSearchQuery] = useState("");
   const [schedules, setSchedules] = useState([]);
   const [trainers, setTrainers] = useState([]);  // ← NEW: Real trainers
@@ -51,6 +51,7 @@ const ClientDashboard = () => {
   const [connectionStatuses, setConnectionStatuses] = useState<Record<string, string>>({});
   const [incomingRequestIds, setIncomingRequestIds] = useState<Record<string, string>>({});
   const [isSendingRequest, setIsSendingRequest] = useState(false);
+  const [plansOpen, setPlansOpen] = useState(false);
 
   // Fetch schedules on component mount
   useEffect(() => {
@@ -147,7 +148,7 @@ const ClientDashboard = () => {
 
   // ========== NEW: Search trainers with debounce ==========
   useEffect(() => {
-    if (activeTab !== 'instructors' || !searchQuery.trim()) return;
+    if (!searchQuery.trim()) return;
 
     const searchTimeout = setTimeout(async () => {
       try {
@@ -167,7 +168,7 @@ const ClientDashboard = () => {
     }, 500);
 
     return () => clearTimeout(searchTimeout);
-  }, [searchQuery, activeTab, toast]);
+  }, [searchQuery, toast]);
   // ========== END Search ==========
 
   const handleDeleteSchedule = async (scheduleId: string) => {
@@ -235,7 +236,10 @@ const ClientDashboard = () => {
     exerciseCount: schedule.days?.reduce((total: number, day: any) => total + (day.exercises?.length || 0), 0) || 0,
     owner: schedule.trainer === 'self' ? '' : schedule.trainer,
     isOwnSchedule: schedule.trainer === 'self',
+    createdAt: schedule.createdAt,
   }));
+
+  const connectedTrainer = trainers.find((trainer: any) => connectionStatuses[trainer._id] === "connected");
 
   const filteredFeedPosts = feedPosts.filter((post: any) => {
     if (!searchQuery.trim()) return true;
@@ -247,183 +251,158 @@ const ClientDashboard = () => {
     );
   });
 
+  if (plansOpen) {
+    return (
+      <div className="min-h-screen overflow-x-hidden bg-background">
+        <div className="mx-auto w-full max-w-md">
+          <ScreenHeader
+            title="Plans"
+            onBack={() => setPlansOpen(false)}
+            action={<ThemeToggle className="h-10 w-10 rounded-xl border border-border bg-card" />}
+          />
+          <main className="space-y-3 px-5 pb-4">
+            <button
+              type="button"
+              onClick={handleCreateSchedule}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-sm font-semibold text-primary-foreground"
+            >
+              <Plus className="h-4 w-4" />
+              Create schedule
+            </button>
+            {isLoadingSchedules ? (
+              <div className="flex items-center py-8 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
+                Loading schedules
+              </div>
+            ) : transformedSchedules.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+                No schedules yet. Create one to start a routine.
+              </div>
+            ) : (
+              transformedSchedules.map((schedule: any) => (
+                <ScheduleCard
+                  key={schedule.id}
+                  {...schedule}
+                  onClick={handleScheduleClick}
+                  onDelete={(id) => setScheduleToDelete(id)}
+                />
+              ))
+            )}
+          </main>
+        </div>
+        <AlertDialog open={!!scheduleToDelete} onOpenChange={() => setScheduleToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Schedule?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete your schedule and all its exercises.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => scheduleToDelete && handleDeleteSchedule(scheduleToDelete)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    );
+  }
+
   return (
-    <div className={`min-h-screen overflow-x-hidden ${activeTab === "instructors" ? "bg-[#F0F2F5] dark:bg-background" : "bg-background"}`}>
+    <div className="min-h-screen overflow-x-hidden bg-background">
       <DashboardHeader clientName={user?.name || "User"} />
 
-      <main className="p-4 md:p-8 max-w-7xl mx-auto space-y-4 md:space-y-8">
-        <section className="grid grid-cols-2 gap-3 md:gap-6">
-          <button
-            type="button"
-            onClick={() => setActiveTab("instructors")}
-            className={`group relative overflow-hidden rounded-2xl md:rounded-3xl border p-3 md:p-8 text-left transition-all duration-300 min-h-[92px] md:min-h-[220px] ${
-              activeTab === "instructors"
-                ? "border-primary shadow-md md:shadow-glow bg-gradient-to-br from-primary/20 via-card to-accent/10"
-                : "border-border bg-card hover:border-primary/40 hover:shadow-lg"
-            }`}
-          >
-            <div className="absolute -right-8 -top-8 h-20 w-20 md:h-36 md:w-36 rounded-full bg-primary/20 blur-2xl group-hover:bg-primary/30" />
-            <div className="relative flex h-full flex-col justify-between gap-2 md:gap-6">
-              <div className="flex items-start justify-between">
-                <div className="flex h-8 w-8 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-lg">
-                  <Images className="h-4 w-4 md:h-7 md:w-7" />
-                </div>
-                {activeTab === "instructors" && (
-                  <span className="rounded-full bg-primary px-2 py-0.5 md:px-3 md:py-1 text-[10px] md:text-xs font-semibold text-primary-foreground">
-                    Selected
-                  </span>
-                )}
-              </div>
-              <div>
-                <h2 className="font-heading text-base md:text-4xl text-foreground leading-tight">Contents</h2>
-                <p className="mt-2 hidden md:block text-muted-foreground">
-                  Trainer posts, then open a profile from any post.
-                </p>
-                <div className="mt-1 md:mt-4 flex items-center gap-1 md:gap-2 text-[11px] md:text-sm font-medium text-primary">
-                  {feedPosts.length} posts
-                  <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
-                </div>
-              </div>
+      <main className="mx-auto w-full max-w-md space-y-5 px-5 pb-4">
+        <section className="grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => navigate("/progress")} className="tap-card p-4 text-left">
+            <div className="icon-chip mb-3">
+              <TrendingUp className="h-4 w-4" />
             </div>
+            <div className="text-base font-bold text-foreground">Progress</div>
+            <div className="text-xs text-muted-foreground">Weight and logs</div>
           </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("schedules")}
-            className={`group relative overflow-hidden rounded-2xl md:rounded-3xl border p-3 md:p-8 text-left transition-all duration-300 min-h-[92px] md:min-h-[220px] ${
-              activeTab === "schedules"
-                ? "border-primary shadow-md md:shadow-glow bg-gradient-to-br from-primary/20 via-card to-accent/10"
-                : "border-border bg-card hover:border-primary/40 hover:shadow-lg"
-            }`}
-          >
-            <div className="absolute -right-8 -bottom-8 h-20 w-20 md:h-36 md:w-36 rounded-full bg-accent/20 blur-2xl group-hover:bg-accent/30" />
-            <div className="relative flex h-full flex-col justify-between gap-2 md:gap-6">
-              <div className="flex items-start justify-between">
-                <div className="flex h-8 w-8 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl bg-gradient-to-br from-accent to-primary text-primary-foreground shadow-lg">
-                  <Calendar className="h-4 w-4 md:h-7 md:w-7" />
-                </div>
-                {activeTab === "schedules" && (
-                  <span className="rounded-full bg-primary px-2 py-0.5 md:px-3 md:py-1 text-[10px] md:text-xs font-semibold text-primary-foreground">
-                    Selected
-                  </span>
-                )}
-              </div>
-              <div>
-                <h2 className="font-heading text-base md:text-4xl text-foreground leading-tight">Schedules</h2>
-                <p className="mt-2 hidden md:block text-muted-foreground">
-                  Your workout plans, days, and routines in one place.
-                </p>
-                <div className="mt-1 md:mt-4 flex items-center gap-1 md:gap-2 text-[11px] md:text-sm font-medium text-primary">
-                  {schedules.length} schedules
-                  <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
-                </div>
-              </div>
+          <button type="button" onClick={() => setPlansOpen(true)} className="tap-card p-4 text-left">
+            <div className="icon-chip mb-3">
+              <Calendar className="h-4 w-4" />
+            </div>
+            <div className="text-base font-bold text-foreground">Plans</div>
+            <div className="text-xs text-muted-foreground">
+              {transformedSchedules.length} {transformedSchedules.length === 1 ? "schedule" : "schedules"}
             </div>
           </button>
         </section>
 
-        <AnimatePresence mode="wait">
-          {activeTab === "schedules" ? (
-            <motion.div
-              key="schedules"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="mb-6">
-                <h2 className="text-2xl md:text-3xl font-heading text-foreground">Your plans</h2>
-                <p className="mt-1 text-sm text-muted-foreground">Open a schedule to follow each day’s session.</p>
+        <section>
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground">Your coach</h3>
+            {connectedTrainer ? (
+              <button type="button" className="text-xs font-semibold text-primary" onClick={() => navigate(`/trainer/${connectedTrainer._id}`)}>
+                View bio
+              </button>
+            ) : null}
+          </div>
+          {connectedTrainer ? (
+            <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-foreground">{connectedTrainer.name}</p>
+                <p className="truncate text-xs text-muted-foreground">{connectedTrainer.specialization || "Trainer"}</p>
               </div>
-
-              {isLoadingSchedules ? (
-                <div className="flex justify-center items-center py-20">
-                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                  <span className="ml-3 text-muted-foreground">Loading schedules...</span>
-                </div>
-              ) : transformedSchedules.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-                    <Calendar className="h-7 w-7" />
-                  </div>
-                  <h3 className="font-heading text-lg text-foreground">No schedules yet</h3>
-                  <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-                    Create a plan or wait for your trainer to share one.
-                  </p>
-                  <Button onClick={handleCreateSchedule} className="mt-6 rounded-full">
-                    <Plus className="w-5 h-5 mr-2" />
-                    Create schedule
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                  {transformedSchedules.map((schedule: any) => (
-                    <ScheduleCard
-                      key={schedule.id}
-                      {...schedule}
-                      onClick={handleScheduleClick}
-                      onDelete={(id) => setScheduleToDelete(id)}
-                    />
-                  ))}
-                </div>
-              )}
-            </motion.div>
+              <button
+                type="button"
+                onClick={() => navigate(`/messages?trainerId=${connectedTrainer._id}`)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary"
+                aria-label="Message coach"
+              >
+                <MessageSquare className="h-4 w-4" />
+              </button>
+            </div>
           ) : (
-            <motion.div
-              key="instructors"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="relative mx-auto mb-3 max-w-[680px] md:mb-4">
-                <Search className="absolute left-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search posts or trainers..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-10 rounded-full border-border bg-card pl-11 shadow-sm"
-                />
-              </div>
-
-              <ContentFeed
-                posts={filteredFeedPosts}
-                stories={
-                  searchQuery
-                    ? []
-                    : trainers.slice(0, 12).map((trainer: any) => ({
-                        _id: trainer._id,
-                        name: trainer.name,
-                        profileImage: trainer.profileImage,
-                      }))
-                }
-                isLoading={isLoadingFeed}
-                emptyTitle={searchQuery ? "No matching posts" : "No contents yet"}
-                emptyDescription={
-                  searchQuery ? "No posts match that search." : "Trainers have not posted images yet."
-                }
-                onOpenProfile={(id) => navigate(`/trainer/${id}`)}
-              />
-            </motion.div>
+            <button type="button" onClick={() => navigate("/messages")} className="w-full rounded-2xl border border-dashed border-border bg-card p-4 text-left text-sm text-muted-foreground">
+              No coach connected yet. Open a trainer from the feed to connect.
+            </button>
           )}
-        </AnimatePresence>
+        </section>
 
-        {/* Create Schedule FAB */}
-        {activeTab === "schedules" && (
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            className="fixed bottom-6 right-6"
-          >
-            <Button
-              size="lg"
-              onClick={handleCreateSchedule}
-              className="h-14 w-14 rounded-full shadow-lg shadow-primary/30 bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-6 w-6" />
-            </Button>
-          </motion.div>
+        <section className="space-y-3">
+          <h3 className="text-sm font-bold text-foreground">Contents</h3>
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search posts"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="h-11 rounded-xl border-border bg-card pl-10"
+            />
+          </div>
+          <ContentFeed
+            posts={filteredFeedPosts}
+            isLoading={isLoadingFeed}
+            emptyTitle={searchQuery ? "No matching posts" : "No contents yet"}
+            emptyDescription={searchQuery ? "No posts match that search." : "Trainers have not posted images yet."}
+            onOpenProfile={(id) => navigate(`/trainer/${id}`)}
+          />
+        </section>
+
+        {transformedSchedules.length > 0 && (
+          <section className="space-y-3">
+            <h3 className="text-sm font-bold text-foreground">Your plans</h3>
+            <div className="space-y-3">
+              {transformedSchedules.map((schedule: any) => (
+                <ScheduleCard
+                  key={schedule.id}
+                  {...schedule}
+                  onClick={handleScheduleClick}
+                  onDelete={(id) => setScheduleToDelete(id)}
+                />
+              ))}
+            </div>
+          </section>
         )}
       </main>
 
@@ -458,7 +437,7 @@ const ClientDashboard = () => {
           ) : selectedTrainer ? (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl font-heading gradient-text">Trainer Profile</DialogTitle>
+                <DialogTitle className="font-heading text-xl font-bold text-foreground">Trainer profile</DialogTitle>
               </DialogHeader>
               
               <div className="space-y-6">

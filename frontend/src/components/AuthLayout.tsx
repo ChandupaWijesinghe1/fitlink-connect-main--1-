@@ -1,5 +1,6 @@
-import { motion } from "framer-motion";
 import { ReactNode } from "react";
+import { Link } from "react-router-dom";
+import { Dumbbell } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 
 interface AuthLayoutProps {
@@ -10,110 +11,43 @@ interface AuthLayoutProps {
 }
 
 const AuthLayout = ({ children, title, subtitle, accentType = "client" }: AuthLayoutProps) => {
+  const clientActive = accentType === "client";
+
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      <div className="absolute top-4 right-4 z-20">
+    <div className="relative min-h-screen bg-background">
+      <div className="absolute right-4 top-4 z-20">
         <ThemeToggle />
       </div>
-      {/* Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div 
-          className={`absolute -top-1/2 -right-1/2 w-full h-full rounded-full blur-3xl opacity-20 ${
-            accentType === "client" ? "bg-primary" : "bg-accent"
-          }`}
-        />
-        <div 
-          className={`absolute -bottom-1/2 -left-1/2 w-full h-full rounded-full blur-3xl opacity-10 ${
-            accentType === "client" ? "bg-primary" : "bg-accent"
-          }`}
-        />
-        
-        {/* Grid Pattern */}
-        <div 
-          className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `linear-gradient(hsl(var(--foreground) / 0.1) 1px, transparent 1px),
-                              linear-gradient(90deg, hsl(var(--foreground) / 0.1) 1px, transparent 1px)`,
-            backgroundSize: '50px 50px'
-          }}
-        />
-      </div>
 
-      <div className="relative z-10 min-h-screen flex flex-col lg:flex-row">
-        {/* Left Side - Branding */}
-        <motion.div 
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="lg:w-1/2 p-8 lg:p-16 flex flex-col justify-center"
-        >
-          <div className="max-w-md mx-auto lg:mx-0">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.6 }}
-            >
-              <span className={`text-sm font-semibold tracking-widest uppercase ${
-                accentType === "client" ? "text-primary" : "text-accent"
-              }`}>
-                {accentType === "client" ? "Client Portal" : "Trainer Portal"}
-              </span>
-            </motion.div>
-            
-            <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
-              className="font-heading text-5xl lg:text-7xl mt-4 leading-tight"
-            >
-              <span className="gradient-text">{title}</span>
-            </motion.h1>
-            
-            <motion.p 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4, duration: 0.6 }}
-              className="text-muted-foreground text-lg mt-6 leading-relaxed"
-            >
-              {subtitle}
-            </motion.p>
-
-            {/* Decorative Stats */}
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5, duration: 0.6 }}
-              className="flex gap-8 mt-12"
-            >
-              <div>
-                <div className="font-heading text-4xl text-foreground">10K+</div>
-                <div className="text-muted-foreground text-sm">Active Users</div>
-              </div>
-              <div>
-                <div className="font-heading text-4xl text-foreground">500+</div>
-                <div className="text-muted-foreground text-sm">Trainers</div>
-              </div>
-              <div>
-                <div className="font-heading text-4xl text-foreground">98%</div>
-                <div className="text-muted-foreground text-sm">Success Rate</div>
-              </div>
-            </motion.div>
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center px-6 py-16">
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+            <Dumbbell className="h-8 w-8" />
           </div>
-        </motion.div>
+          <h1 className="font-heading text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm text-muted-foreground">{subtitle}</p>
+        </div>
 
-        {/* Right Side - Form */}
-        <motion.div 
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.8 }}
-          className="lg:w-1/2 p-8 lg:p-16 flex items-center justify-center"
-        >
-          <div className="w-full max-w-md">
-            <div className="glass-card p-8 lg:p-10">
-              {children}
-            </div>
-          </div>
-        </motion.div>
+        <div className="mb-6 flex rounded-2xl border border-border bg-card p-1">
+          <Link
+            to="/"
+            className={`flex-1 rounded-xl py-2.5 text-center text-xs font-semibold ${
+              clientActive ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground"
+            }`}
+          >
+            Client
+          </Link>
+          <Link
+            to="/trainer/login"
+            className={`flex-1 rounded-xl py-2.5 text-center text-xs font-semibold ${
+              clientActive ? "text-muted-foreground" : "bg-primary text-primary-foreground shadow-sm"
+            }`}
+          >
+            Trainer
+          </Link>
+        </div>
+
+        {children}
       </div>
     </div>
   );

@@ -61,66 +61,62 @@ const ClientProfile = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="flex-1 font-heading text-xl text-foreground">Profile</h1>
-          <ThemeToggle className="h-10 w-10" />
+      <main className="mx-auto max-w-md space-y-5 px-5 py-6">
+        <div className="flex items-center justify-between">
+          <h1 className="font-heading text-xl font-bold text-foreground">Profile</h1>
+          <ThemeToggle className="h-11 w-11 rounded-2xl border border-border bg-card" />
         </div>
-      </header>
 
-      <main className="mx-auto max-w-3xl space-y-6 px-4 py-6">
-        <Card className="overflow-hidden border-border">
-          <div className="h-24 bg-gradient-to-r from-primary via-accent to-primary" />
-          <CardContent className="relative -mt-10 pb-6">
-            <Avatar className="h-20 w-20 border-4 border-background">
-              <AvatarImage src={user?.profileImage || ""} alt={user?.name} />
-              <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
-                {user?.name?.charAt(0) || "C"}
-              </AvatarFallback>
-            </Avatar>
-            <h2 className="mt-4 text-2xl font-heading text-foreground">{user?.name || "Client"}</h2>
-            <p className="text-sm text-muted-foreground">Client account</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-2 text-center">
+          <Avatar className="mx-auto h-20 w-20 border-4 border-card">
+            <AvatarImage src={user?.profileImage || ""} alt={user?.name} />
+            <AvatarFallback className="bg-primary text-2xl text-primary-foreground">
+              {user?.name?.charAt(0) || "C"}
+            </AvatarFallback>
+          </Avatar>
+          <h2 className="font-heading text-lg font-bold text-foreground">{user?.name || "Client"}</h2>
+          <p className="text-xs text-muted-foreground">{user?.email || "No email"}</p>
+        </div>
 
-        <Card className="border-border">
-          <CardContent className="space-y-4 p-5">
-            <div className="flex items-center gap-3 text-sm">
-              <Mail className="h-4 w-4 text-primary" />
-              <span className="text-foreground">{user?.email || "No email"}</span>
-            </div>
-            <div className="flex items-center gap-3 text-sm">
-              <Phone className="h-4 w-4 text-primary" />
-              <span className="text-foreground">{user?.phone || "No phone on file"}</span>
-            </div>
-            <div className="flex items-center gap-3 text-sm">
-              <User className="h-4 w-4 text-primary" />
-              <span className="text-foreground">
-                {trainer ? `Connected to ${trainer.name}` : "No trainer connected yet"}
+        <Card>
+          <CardContent className="divide-y divide-border p-0">
+            <button
+              type="button"
+              onClick={() => navigate("/progress")}
+              className="flex w-full items-center justify-between px-4 py-4 text-left text-sm font-semibold"
+            >
+              <span className="flex items-center gap-3">
+                <TrendingUp className="h-4 w-4 text-primary" />
+                Progress
               </span>
+              <ArrowLeft className="h-4 w-4 rotate-180 text-muted-foreground" />
+            </button>
+            <div className="flex items-center gap-3 px-4 py-4 text-sm">
+              <Mail className="h-4 w-4 text-primary" />
+              <span>{user?.email || "No email"}</span>
             </div>
+            <div className="flex items-center gap-3 px-4 py-4 text-sm">
+              <Phone className="h-4 w-4 text-primary" />
+              <span>{user?.phone || "No phone on file"}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => trainer?._id && navigate(`/trainer/${trainer._id}`)}
+              className="flex w-full items-center gap-3 px-4 py-4 text-left text-sm"
+            >
+              <User className="h-4 w-4 text-accent" />
+              <span>{trainer ? trainer.name : "No trainer connected yet"}</span>
+            </button>
           </CardContent>
         </Card>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Button className="rounded-full" onClick={() => navigate("/progress")}>
-            <TrendingUp className="mr-2 h-4 w-4" />
-            View progress
-          </Button>
-          <Button variant="outline" className="rounded-full" onClick={() => navigate("/dashboard")}>
-            Back to dashboard
-          </Button>
-          <Button
-            variant="outline"
-            className="rounded-full text-destructive hover:bg-destructive/10 sm:col-span-2"
-            onClick={handleLogout}
-          >
-            Log out
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          className="w-full text-destructive hover:bg-destructive/10"
+          onClick={handleLogout}
+        >
+          Sign out
+        </Button>
       </main>
     </div>
   );

@@ -2,18 +2,20 @@ import { io, Socket } from 'socket.io-client';
 
 let socket: Socket | null = null;
 
-export const initializeSocket = (userId: string) => {
+// The server identifies the user from the login token sent in the handshake,
+// so no user id is sent from here.
+export const initializeSocket = () => {
   if (!socket) {
     socket = io('http://localhost:5000', {
       autoConnect: false,
+      auth: (cb) => cb({ token: localStorage.getItem('token') }),
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('🔌 Socket connection failed:', error.message);
     });
 
     socket.connect();
-    
-    // Join with user ID
-    socket.emit('user:join', userId);
-    
-    console.log('🔌 Socket connected:', socket.id);
   }
   
   return socket;

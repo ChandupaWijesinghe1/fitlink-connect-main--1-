@@ -9,13 +9,17 @@ import {
   acceptConnectionRequest,
   declineConnectionRequest
 } from '../controllers/notificationController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, requireSelf } from '../middleware/authMiddleware.js';
+import { validateIdParam } from '../middleware/validators.js';
 
 const router = express.Router();
 
+// All notification routes require authentication
+router.use(protect);
+
 // ========== OLD ROUTE: Get connection request notifications ==========
-// Get all notifications for a user (connection requests based)
-router.get('/user/:userId', async (req, res) => {
+// Get all notifications for a user (connection requests based) - own account only
+router.get('/user/:userId', validateIdParam('userId'), requireSelf('userId'), async (req, res) => {
   try {
     const { userId } = req.params;
 
@@ -54,8 +58,6 @@ router.get('/user/:userId', async (req, res) => {
 });
 
 // ========== NEW ROUTES: Full notification system ==========
-// All routes below require authentication
-router.use(protect);
 
 // GET all notifications (from Notification model)
 router.get('/', getNotifications);

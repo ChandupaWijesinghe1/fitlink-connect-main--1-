@@ -1,25 +1,20 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Mail, Lock, ArrowRight, Award, Loader2 } from "lucide-react";  // ← NEW: Added Loader2
+import { Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "@/components/AuthLayout";
-import AuthInput from "@/components/AuthInput";
-import { useAuth } from "@/context/AuthContext";  // ← NEW
-import { useToast } from "@/hooks/use-toast";  // ← NEW
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const TrainerLogin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);  // ← NEW
-
-  const { login } = useAuth();  // ← NEW
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
-  const { toast } = useToast();  // ← NEW
+  const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {  // ← NEW: async
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // ← NEW: Validation
     if (!email || !password) {
       toast({
         title: "Error",
@@ -31,17 +26,12 @@ const TrainerLogin = () => {
 
     try {
       setIsLoading(true);
-      await login(email, password, 'trainer');  // ← NEW: API CALL with 'trainer' type
-      
-      toast({
-        title: "Success!",
-        description: "Welcome back, coach!",
-      });
-      
-      navigate('/trainer/dashboard');  // ← NEW: Redirect to trainer dashboard
+      await login(email, password, "trainer");
+      toast({ title: "Welcome back", description: "Trainer studio is open." });
+      navigate("/trainer/dashboard");
     } catch (error: any) {
       toast({
-        title: "Login Failed",
+        title: "Login failed",
         description: error.message || "Invalid email or password",
         variant: "destructive",
       });
@@ -51,120 +41,72 @@ const TrainerLogin = () => {
   };
 
   return (
-    <AuthLayout
-      title="Empower Others"
-      subtitle="Access your trainer dashboard, manage clients, and create personalized workout plans. Lead the transformation."
-      accentType="trainer"
-    >
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
-          className="flex items-center gap-3 mb-8"
+    <div className="trainer-gold flex min-h-screen justify-center bg-background text-foreground">
+      <div className="relative flex w-full max-w-md flex-col justify-between bg-background px-6 py-10">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle className="h-10 w-10 rounded-full border border-border bg-card" />
+        </div>
+        <div className="pt-8 text-center">
+          <span className="mb-3 inline-block rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] luxury-gold-text">
+            Master trainer portal
+          </span>
+          <h1 className="luxury-gold-text text-3xl font-bold uppercase tracking-[0.16em]">
+            FitConnect Pro
+          </h1>
+          <p className="mt-2 text-xs text-muted-foreground">Coach and studio access</p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="my-8 space-y-4 rounded-2xl border border-primary/25 bg-card p-6 shadow-sm"
         >
-          <div className="w-12 h-12 rounded-xl bg-accent/20 flex items-center justify-center">
-            <Award className="w-6 h-6 text-accent" />
+          <div>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] luxury-gold-text">
+              Trainer email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="coach@studio.com"
+              className="w-full rounded-xl border border-border bg-background p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50"
+              required
+            />
           </div>
           <div>
-            <h2 className="font-heading text-2xl text-foreground">Trainer Login</h2>
-            <p className="text-muted-foreground text-sm">Welcome back, coach</p>
+            <label className="mb-1 block text-[10px] font-bold uppercase tracking-[0.2em] luxury-gold-text">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Security passcode"
+              className="w-full rounded-xl border border-border bg-background p-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary/50"
+              required
+            />
           </div>
-        </motion.div>
-
-        <AuthInput
-          type="email"
-          placeholder="Email address"
-          icon={Mail}
-          value={email}
-          onChange={setEmail}
-          delay={0.2}
-        />
-
-        <AuthInput
-          type="password"
-          placeholder="Password"
-          icon={Lock}
-          value={password}
-          onChange={setPassword}
-          delay={0.3}
-        />
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.4 }}
-          className="flex items-center justify-between text-sm"
-        >
-          <label className="flex items-center gap-2 text-muted-foreground cursor-pointer">
-            <input type="checkbox" className="w-4 h-4 rounded border-border bg-input accent-accent" />
-            Remember me
-          </label>
-          <Link to="#" className="text-accent hover:text-accent/80 transition-colors">
-            Forgot password?
-          </Link>
-        </motion.div>
-
-        {/* ========== NEW: Button with Loading State ========== */}
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.4 }}
-          type="submit"
-          disabled={isLoading}
-          className="btn-accent w-full flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Signing In...
-            </>
-          ) : (
-            <>
-              Sign In
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </>
-          )}
-        </motion.button>
-        {/* ========== END Button ========== */}
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6, duration: 0.4 }}
-          className="relative my-8"
-        >
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-border" />
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-4 bg-card text-muted-foreground">or</span>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.4 }}
-          className="space-y-4"
-        >
-          <p className="text-center text-muted-foreground text-sm">
-            Don't have a trainer account?{" "}
-            <Link to="/trainer/signup" className="text-accent hover:text-accent/80 font-semibold transition-colors">
-              Sign Up
-            </Link>
-          </p>
-
-          <Link
-            to="/"
-            className="btn-primary w-full flex items-center justify-center gap-2 group"
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="luxury-gold-btn w-full rounded-2xl py-4 text-xs font-bold uppercase tracking-[0.22em] disabled:opacity-60"
           >
-            Login as Client
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            {isLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Access studio"}
+          </button>
+        </form>
+
+        <div className="space-y-3 text-center text-xs">
+          <Link to="/trainer/signup" className="font-semibold luxury-gold-text">
+            Apply as a trainer
           </Link>
-        </motion.div>
-      </form>
-    </AuthLayout>
+          <div>
+            <Link to="/" className="text-muted-foreground hover:text-primary">
+              Back to client login
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 

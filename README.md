@@ -90,6 +90,8 @@ NODE_ENV=development
 
 For Atlas, put your Atlas URI in `MONGODB_URI`.
 
+If you deploy the API behind a reverse proxy (Render, Railway, Nginx and similar), also set `TRUST_PROXY=1`. The login rate limit counts attempts per IP address, and without this every visitor appears to come from the proxy's address.
+
 Start the API:
 
 ```bash

@@ -24,6 +24,7 @@ import NotFound from "./pages/NotFound";
 import ExerciseManagement from "@/pages/ExerciseManagement";
 import ClientProgress from "@/pages/ClientProgress";
 import ClientProfile from "@/pages/ClientProfile";
+import ProtectedRoute from "@/components/ProtectedRoute";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -35,26 +36,40 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
+            {/* Public pages */}
             <Route path="/" element={<Index />} />
             <Route path="/signup" element={<ClientSignup />} />
-            <Route path="/dashboard" element={<ClientDashboard />} />
-            <Route path="/progress" element={<ClientProgress />} />
-            <Route path="/profile" element={<ClientProfile />} />
-            <Route path="/messages" element={<ClientMessages />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/schedule/create" element={<CreateSchedule />} />
-            <Route path="/schedule/add-exercises" element={<AddExercises />} />
-            <Route path="/schedule/:id" element={<ScheduleDetail />} />
             <Route path="/trainer/login" element={<TrainerLogin />} />
             <Route path="/trainer/signup" element={<TrainerSignup />} />
-            <Route path="/trainer/dashboard" element={<TrainerDashboard />} />
-            <Route path="/trainer/messages" element={<TrainerMessages />} />
-            <Route path="/trainer/gym" element={<TrainerGym />} />
-            <Route path="/trainer/notifications" element={<Notifications />} />
-            <Route path="/trainer/me" element={<TrainerMyProfile />} />
-            <Route path="/trainer/clients/:clientId/progress" element={<ClientProgress />} />
-            <Route path="/trainer/:id" element={<TrainerProfile />} />
-            <Route path="/exercises/manage" element={<ExerciseManagement />} />
+
+            {/* Clients only */}
+            <Route element={<ProtectedRoute role="client" />}>
+              <Route path="/dashboard" element={<ClientDashboard />} />
+              <Route path="/progress" element={<ClientProgress />} />
+              <Route path="/profile" element={<ClientProfile />} />
+              <Route path="/messages" element={<ClientMessages />} />
+              <Route path="/notifications" element={<Notifications />} />
+            </Route>
+
+            {/* Trainers only */}
+            <Route element={<ProtectedRoute role="trainer" />}>
+              <Route path="/trainer/dashboard" element={<TrainerDashboard />} />
+              <Route path="/trainer/messages" element={<TrainerMessages />} />
+              <Route path="/trainer/gym" element={<TrainerGym />} />
+              <Route path="/trainer/notifications" element={<Notifications />} />
+              <Route path="/trainer/me" element={<TrainerMyProfile />} />
+              <Route path="/trainer/clients/:clientId/progress" element={<ClientProgress />} />
+              <Route path="/exercises/manage" element={<ExerciseManagement />} />
+            </Route>
+
+            {/* Any logged-in user */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/schedule/create" element={<CreateSchedule />} />
+              <Route path="/schedule/add-exercises" element={<AddExercises />} />
+              <Route path="/schedule/:id" element={<ScheduleDetail />} />
+              <Route path="/trainer/:id" element={<TrainerProfile />} />
+            </Route>
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

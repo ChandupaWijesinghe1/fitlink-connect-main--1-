@@ -1,25 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  ArrowLeft,
-  Search,
-  Send,
   Calendar,
   Dumbbell,
   CheckCircle2,
   Sparkles,
   User,
   Clock,
-  Star,
   Loader2,
-  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +29,8 @@ import {
 } from "@/api/messages";
 import { getScheduleById } from "@/api/schedules";
 import { getTrainerById } from "@/api/trainers";  // ← NEW
-import ThemeToggle from "@/components/ThemeToggle";
+import ChatThread from "@/components/chat/ChatThread";
+import ChatList from "@/components/chat/ChatList";
 
 interface Conversation {
   conversationId: string;
@@ -49,6 +42,8 @@ interface Conversation {
   lastMessage: {
     message: string;
     createdAt: string;
+    messageType?: string;
+    sender?: { id: string };
   };
   unreadCount: number;
 }
@@ -81,9 +76,6 @@ const ClientMessages = () => {
   const [searchParams] = useSearchParams();  // ← NEW
   const { user } = useAuth();
   const { toast } = useToast();
-  const scrollRef = useRef<HTMLDivElement>(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -100,7 +92,7 @@ const ClientMessages = () => {
   useEffect(() => {
     if (!user?._id) return;
 
-    const socket = initializeSocket(user._id);
+    const socket = initializeSocket();
 
     // Listen for incoming messages
     socket.on('message:receive', (message: Message) => {
@@ -270,17 +262,9 @@ const ClientMessages = () => {
         messageType: 'text',
       };
 
-      // Send via API
+      // Send via API. The server saves the message and pushes it to the
+      // receiver over the socket, so nothing is emitted from here.
       await sendMessageAPI(messageData);
-
-      // Send via Socket for real-time
-      socket.emit('message:send', {
-        senderId: user._id,
-        senderType: 'User',
-        receiverId: selectedConversation.otherUser.id,
-        receiverType: selectedConversation.otherUser.type,
-        message: newMessage.trim(),
-      });
 
       setNewMessage("");
 
@@ -408,35 +392,6 @@ const ClientMessages = () => {
     }
   };
 
-  // Auto-scroll to bottom
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
-
-  // Filter conversations
-  const filteredConversations = conversations.filter((conv) =>
-    conv.otherUser.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  // Format time
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString();
-  };
-
   const formatMessageTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -464,271 +419,60 @@ const ClientMessages = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Decorative Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-primary/10 rounded-full blur-3xl" />
-      </div>
-
-      <div className="relative flex h-screen">
+    <div className="fixed inset-x-0 top-0 bottom-[var(--app-bottom-nav)] z-30 flex overflow-hidden bg-background">
         {/* Conversations Sidebar */}
-        <motion.div
-          initial={{ x: -100, opacity: 0 }}
-          animate={{ x: 0, opacity: 1 }}
-          className="w-full md:w-96 border-r border-border/50 flex flex-col bg-card/30 backdrop-blur-sm"
+        <div
+          className="flex h-full w-full flex-col md:w-[400px] md:border-r md:border-border"
           style={{ display: selectedConversation && window.innerWidth < 768 ? "none" : "flex" }}
         >
-          {/* Header */}
-          <div className="p-4 border-b border-border/50">
-            <div className="flex items-center gap-3 mb-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/dashboard")}
-                className="hover:bg-accent/20"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold gradient-text">Messages</h1>
-                <p className="text-sm text-muted-foreground">Chat with your trainers</p>
-              </div>
-              <ThemeToggle className="h-10 w-10" />
-            </div>
-
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search trainers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-secondary/50 border-border/50 focus:border-accent"
-              />
-            </div>
-          </div>
-
-          {/* Conversation List */}
-          <ScrollArea className="flex-1">
-            {isLoadingConversations ? (
-              <div className="flex justify-center items-center py-20">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-              </div>
-            ) : filteredConversations.length === 0 ? (
-              <div className="text-center py-20 px-4">
-                <p className="text-muted-foreground">No conversations yet</p>
-              </div>
-            ) : (
-              <div className="p-2 space-y-1">
-                {filteredConversations.map((conversation, index) => (
-                  <motion.div
-                    key={conversation.conversationId}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    onClick={() => handleConversationSelect(conversation)}
-                    className={`p-3 rounded-xl cursor-pointer transition-all duration-300 hover:scale-[1.02] ${selectedConversation?.conversationId === conversation.conversationId
-                        ? "bg-gradient-to-r from-accent/30 to-primary/20 border border-accent/50"
-                        : "hover:bg-secondary/50"
-                      }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-12 w-12 border-2 border-accent/30">
-                        <AvatarFallback className="bg-accent/20 text-accent">
-                          {conversation.otherUser.name[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-foreground">
-                            {conversation.otherUser.name}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {formatTime(conversation.lastMessage.createdAt)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {conversation.lastMessage.message}
-                        </p>
-                      </div>
-                      {conversation.unreadCount > 0 && (
-                        <Badge className="bg-gradient-to-r from-accent to-primary text-accent-foreground border-0 text-xs px-2 py-0.5">
-                          {conversation.unreadCount}
-                        </Badge>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </motion.div>
+          <ChatList
+            items={conversations.map((conversation) => ({
+              id: conversation.conversationId,
+              name: conversation.otherUser.name,
+              preview:
+                conversation.lastMessage.messageType === "schedule"
+                  ? "Shared a workout plan"
+                  : conversation.lastMessage.message,
+              time: conversation.lastMessage.createdAt,
+              unreadCount: conversation.unreadCount,
+              sentByMe: String(conversation.lastMessage.sender?.id || "") === String(user?._id || ""),
+            }))}
+            selectedId={selectedConversation?.conversationId}
+            isLoading={isLoadingConversations}
+            emptyText="No conversations yet"
+            onSelect={(id) => {
+              const conversation = conversations.find((item) => item.conversationId === id);
+              if (conversation) handleConversationSelect(conversation);
+            }}
+            onBack={() => navigate("/dashboard")}
+          />
+        </div>
 
         {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
           {selectedConversation ? (
-            <>
-              {/* Chat Header */}
-              <motion.div
-                initial={{ y: -20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="p-4 border-b border-border/50 bg-card/30 backdrop-blur-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setSelectedConversation(null);
-                      // Clear the trainerId from URL
-                      navigate('/messages', { replace: true });
-                    }}
-                    className="md:hidden hover:bg-accent/20"
-                  >
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                  <Avatar className="h-11 w-11 border-2 border-accent/50">
-                    <AvatarFallback>{selectedConversation.otherUser.name[0]}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <h2 className="font-semibold text-foreground">
-                      {selectedConversation.otherUser.name}
-                    </h2>
-                    <p className="text-sm text-accent">
-                      {typingUsers.has(selectedConversation.otherUser.id)
-                        ? "typing..."
-                        : selectedConversation.otherUser.type}
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Messages */}
-              <ScrollArea className="flex-1 p-4">
-                {isLoadingMessages ? (
-                  <div className="flex justify-center items-center h-full">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  </div>
-                ) : messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-center">
-                    <div>
-                      <Sparkles className="h-12 w-12 mx-auto mb-4 text-accent" />
-                      <p className="text-muted-foreground">Start your conversation with {selectedConversation.otherUser.name}</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4 max-w-3xl mx-auto">
-                    <AnimatePresence>
-                      {messages.map((message, index) => (
-                        <motion.div
-                          key={message._id}
-                          initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          transition={{ delay: index * 0.02 }}
-                          className={`flex ${message.sender.id === user?._id ? "justify-end" : "justify-start"}`}
-                        >
-                          {message.messageType === "schedule" ? (
-                            <motion.div
-                              whileHover={{ scale: 1.02 }}
-                              className="max-w-sm w-full"
-                            >
-                              <div className="bg-gradient-to-br from-accent/30 via-primary/20 to-accent/30 rounded-2xl p-4 border border-accent/50 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 mb-3">
-                                  <div className="p-2 rounded-lg bg-accent/30">
-                                    <Calendar className="h-5 w-5 text-accent" />
-                                  </div>
-                                  <div>
-                                    <span className="text-xs text-accent font-medium flex items-center gap-1">
-                                      <Sparkles className="h-3 w-3" />
-                                      Shared Schedule
-                                    </span>
-                                    <h4 className="font-semibold text-foreground">
-                                      {message.scheduleData?.title || "Workout Schedule"}
-                                    </h4>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {message.scheduleData?.days || 0} days
-                                  </span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => handleOpenSchedule(message.scheduleId!)}
-                                    disabled={isLoadingSchedule}
-                                    className="flex-1 bg-gradient-to-r from-accent to-accent/80 text-accent-foreground hover:opacity-90"
-                                  >
-                                    {isLoadingSchedule ? (
-                                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                    ) : (
-                                      <Dumbbell className="h-4 w-4 mr-1" />
-                                    )}
-                                    View Details
-                                  </Button>
-                                </div>
-                                <span className="text-xs text-muted-foreground mt-2 block text-right">
-                                  {formatMessageTime(message.createdAt)}
-                                </span>
-                              </div>
-                            </motion.div>
-                          ) : (
-                            <div
-                              className={`max-w-[75%] px-4 py-3 rounded-2xl ${message.sender.id === user?._id
-                                  ? "bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-br-sm"
-                                  : "bg-gradient-to-r from-secondary to-secondary/80 text-foreground rounded-bl-sm border border-border/50"
-                                }`}
-                            >
-                              <p className="text-sm">{message.message}</p>
-                              <span className={`text-xs mt-1 block text-right ${message.sender.id === user?._id ? "text-primary-foreground/70" : "text-muted-foreground"
-                                }`}>
-                                {formatMessageTime(message.createdAt)}
-                              </span>
-                            </div>
-                          )}
-                        </motion.div>
-                      ))}
-                    </AnimatePresence>
-                    <div ref={scrollRef} />
-                  </div>
-                )}
-              </ScrollArea>
-
-              {/* Message Input */}
-              <motion.div
-                initial={{ y: 20, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                className="p-4 border-t border-border/50 bg-card/30 backdrop-blur-sm"
-              >
-                <div className="flex gap-3 max-w-3xl mx-auto">
-                  <Input
-                    placeholder="Type your message..."
-                    value={newMessage}
-                    onChange={(e) => {
-                      setNewMessage(e.target.value);
-                      handleTyping();
-                    }}
-                    onBlur={handleStopTyping}
-                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                    disabled={isSending}
-                    className="flex-1 bg-secondary/50 border-border/50 focus:border-primary rounded-xl"
-                  />
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim() || isSending}
-                    className="bg-gradient-to-r from-primary to-primary/80 hover:opacity-90 rounded-xl px-6"
-                  >
-                    {isSending ? (
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </Button>
-                </div>
-              </motion.div>
-            </>
+            <ChatThread
+              title={selectedConversation.otherUser.name}
+              subtitle={typingUsers.has(selectedConversation.otherUser.id) ? "typing..." : undefined}
+              messages={messages}
+              currentUserId={user?._id}
+              isLoading={isLoadingMessages}
+              isSending={isSending}
+              draft={newMessage}
+              onDraftChange={setNewMessage}
+              onSend={handleSendMessage}
+              onBack={() => {
+                setSelectedConversation(null);
+                navigate("/messages", { replace: true });
+              }}
+              onTyping={handleTyping}
+              onStopTyping={handleStopTyping}
+              formatTime={formatMessageTime}
+              onOpenSchedule={handleOpenSchedule}
+              menuLabel="View profile"
+              onMenu={() => navigate(`/trainer/${selectedConversation.otherUser.id}`)}
+              emptyText={`Start your conversation with ${selectedConversation.otherUser.name}`}
+            />
           ) : (
             <motion.div
               initial={{ opacity: 0 }}
@@ -749,7 +493,6 @@ const ClientMessages = () => {
             </motion.div>
           )}
         </div>
-      </div>
 
       {/* Schedule Detail Dialog */}
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>

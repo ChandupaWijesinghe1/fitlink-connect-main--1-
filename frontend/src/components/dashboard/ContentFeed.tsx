@@ -43,7 +43,7 @@ interface ContentFeedProps {
 
 const CAPTION_LIMIT = 150;
 
-function formatFbTime(value?: string) {
+function formatPostTime(value?: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
@@ -115,12 +115,12 @@ function FeedPostCard({
   };
 
   return (
-    <article className="overflow-hidden border-y border-border/80 bg-card shadow-sm md:rounded-lg md:border">
+    <article className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="flex items-start gap-2.5 px-3 py-2.5 md:px-4 md:py-3">
         <button type="button" onClick={openProfile} className="shrink-0 rounded-full" aria-label={`${trainerName} profile`}>
           <Avatar className="h-10 w-10">
             <AvatarImage src={post.trainer?.profileImage || ""} alt={trainerName} />
-            <AvatarFallback className="bg-[#1877F2]/15 text-[#1877F2]">{initials(trainerName)}</AvatarFallback>
+            <AvatarFallback className="bg-primary/15 text-primary">{initials(trainerName)}</AvatarFallback>
           </Avatar>
         </button>
         <div className="min-w-0 flex-1">
@@ -128,7 +128,7 @@ function FeedPostCard({
             {trainerName}
           </button>
           <p className="flex items-center gap-1 text-[13px] leading-4 text-muted-foreground">
-            <span>{formatFbTime(post.createdAt) || "Recently"}</span>
+            <span>{formatPostTime(post.createdAt) || "Recently"}</span>
             <span aria-hidden>·</span>
             <Globe className="h-3 w-3" />
             {post.trainer?.specialization ? (
@@ -190,7 +190,7 @@ function FeedPostCard({
           <span className="flex items-center gap-1.5">
             {liked ? (
               <>
-                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#1877F2] text-white">
+                <span className="flex h-[18px] w-[18px] items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <ThumbsUp className="h-2.5 w-2.5 fill-current" />
                 </span>
                 You
@@ -210,7 +210,7 @@ function FeedPostCard({
           type="button"
           onClick={() => setLiked((value) => !value)}
           className={`flex items-center justify-center gap-2 rounded-md py-2 text-[14px] font-semibold hover:bg-muted md:text-[15px] ${
-            liked ? "text-[#1877F2]" : "text-muted-foreground"
+            liked ? "text-primary" : "text-muted-foreground"
           }`}
         >
           <ThumbsUp className={`h-[18px] w-[18px] ${liked ? "fill-current" : ""}`} />
@@ -255,7 +255,7 @@ function FeedPostCard({
             }}
           >
             <Avatar className="h-8 w-8">
-              <AvatarFallback className="bg-[#1877F2]/15 text-xs text-[#1877F2]">
+              <AvatarFallback className="bg-primary/15 text-xs text-primary">
                 {initials(user?.name || "You")}
               </AvatarFallback>
             </Avatar>
@@ -263,12 +263,12 @@ function FeedPostCard({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder="Write a comment..."
-              className="h-9 min-w-0 flex-1 rounded-full bg-muted px-4 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-[#1877F2]/40"
+              className="h-9 min-w-0 flex-1 rounded-full bg-muted px-4 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40"
             />
             <button
               type="submit"
               disabled={!draft.trim()}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-[#1877F2] disabled:opacity-40"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-primary disabled:opacity-40"
               aria-label="Send comment"
             >
               <Send className="h-4 w-4" />
@@ -348,7 +348,7 @@ const ContentFeed = ({
   return (
     <div className="-mx-4 w-[calc(100%+2rem)] space-y-2 md:mx-auto md:w-full md:max-w-[680px] md:space-y-4">
       {people.length > 0 ? (
-        <div className="border-y border-border/80 bg-card py-3 shadow-sm md:rounded-lg md:border md:px-3">
+        <div className="rounded-2xl border border-border bg-card py-3">
           <div className="flex gap-2 overflow-x-auto px-3 [scrollbar-width:none] md:px-0 [&::-webkit-scrollbar]:hidden">
             {people.map((person) => (
               <button
@@ -360,12 +360,12 @@ const ContentFeed = ({
                 {person.cover ? (
                   <img src={person.cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-[#1877F2] to-[#0b3f86]" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-primary to-accent" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/75" />
-                <Avatar className="absolute left-2 top-2 h-9 w-9 ring-[3px] ring-[#1877F2]">
+                <Avatar className="absolute left-2 top-2 h-9 w-9 ring-[3px] ring-primary">
                   <AvatarImage src={person.profileImage || ""} alt={person.name || "Trainer"} />
-                  <AvatarFallback className="bg-white text-sm text-[#1877F2]">{initials(person.name)}</AvatarFallback>
+                  <AvatarFallback className="bg-card text-sm text-primary">{initials(person.name)}</AvatarFallback>
                 </Avatar>
                 <span className="absolute bottom-2 left-2 right-2 line-clamp-2 text-left text-xs font-semibold text-white">
                   {person.name || "Trainer"}
@@ -377,7 +377,7 @@ const ContentFeed = ({
       ) : null}
 
       {posts.length === 0 ? (
-        <div className="border-y border-border/80 bg-card px-6 py-16 text-center shadow-sm md:rounded-lg md:border">
+        <div className="rounded-2xl border border-border bg-card px-6 py-16 text-center">
           <h3 className="text-lg font-semibold text-foreground">{emptyTitle}</h3>
           <p className="mt-1 text-sm text-muted-foreground">{emptyDescription}</p>
         </div>

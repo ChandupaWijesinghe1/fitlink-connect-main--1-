@@ -1,83 +1,52 @@
 import { useState } from "react";
-import { motion } from "framer-motion";
-import { Mail, Lock, User, ArrowRight, Dumbbell, Loader2 } from "lucide-react";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import AuthLayout from "@/components/AuthLayout";
-import AuthInput from "@/components/AuthInput";
-import { useAuth } from "@/context/AuthContext";  // ← NEW
-import { useToast } from "@/hooks/use-toast";  // ← NEW
+import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import ThemeToggle from "@/components/ThemeToggle";
+
+const fieldClass = "rounded-2xl border border-primary/25 bg-card p-4";
+const labelClass = "mb-1.5 block text-[10px] font-bold uppercase tracking-[0.2em] luxury-gold-text";
+const inputClass = "w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground";
 
 const ClientSignup = () => {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);  // ← NEW
-  const [agreedToTerms, setAgreedToTerms] = useState(false);  // ← NEW
-
-  const { signup } = useAuth();  // ← NEW
-  const navigate = useNavigate();  // ← NEW
-  const { toast } = useToast();  // ← NEW
+  const [isLoading, setIsLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const { signup } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // ========== NEW: VALIDATION ==========
     if (!name || !email || !password || !confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Please fill in all fields",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please fill in all fields", variant: "destructive" });
       return;
     }
-
     if (password !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
       return;
     }
-
     if (password.length < 6) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 6 characters",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Password must be at least 6 characters", variant: "destructive" });
       return;
     }
-
     if (!agreedToTerms) {
-      toast({
-        title: "Error",
-        description: "Please agree to the Terms of Service",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Please agree to the Terms of Service", variant: "destructive" });
       return;
     }
-    // ========== END VALIDATION ==========
 
     try {
       setIsLoading(true);
-      
-      // ← NEW: API CALL
-      await signup({ name, email, password }, 'client');
-      
-      // ← NEW: Success message
-      toast({
-        title: "Account Created!",
-        description: "Please login with your credentials",
-      });
-      
-      // ← NEW: Redirect to login
-      navigate('/');
+      await signup({ name, email, password }, "client");
+      toast({ title: "Account created", description: "Please login with your credentials" });
+      navigate("/");
     } catch (error: any) {
-      // ← NEW: Error handling
       toast({
-        title: "Signup Failed",
+        title: "Signup failed",
         description: error.message || "Something went wrong",
         variant: "destructive",
       });
@@ -87,139 +56,72 @@ const ClientSignup = () => {
   };
 
   return (
-    <AuthLayout
-      title="Start Your Journey"
-      subtitle="Join thousands of fitness enthusiasts who have transformed their lives. Create your account and connect with world-class trainers."
-      accentType="client"
-    >
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1, duration: 0.4 }}
-          className="flex items-center gap-3 mb-8"
-        >
-          <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
-            <Dumbbell className="w-6 h-6 text-primary" />
+    <div className="trainer-gold flex min-h-screen justify-center bg-background text-foreground">
+      <div className="relative flex w-full max-w-md flex-col bg-background px-6 py-8">
+        <div className="absolute right-4 top-4">
+          <ThemeToggle className="h-10 w-10 rounded-full border border-border bg-card" />
+        </div>
+        <Link to="/" className="mb-6 inline-flex items-center gap-2 pr-12 text-xs luxury-gold-text">
+          <ChevronLeft className="h-4 w-4" />
+          Back to login
+        </Link>
+        <h1 className="luxury-gold-text text-3xl font-bold uppercase tracking-[0.08em]">
+          Membership
+        </h1>
+        <p className="mt-2 text-xs text-muted-foreground">Create your client account.</p>
+
+        <form onSubmit={handleSubmit} className="mt-6 space-y-3">
+          <div className={fieldClass}>
+            <label className={labelClass}>Full name</label>
+            <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" required />
           </div>
-          <div>
-            <h2 className="font-heading text-2xl text-foreground">Create Account</h2>
-            <p className="text-muted-foreground text-sm">Begin your transformation</p>
+          <div className={fieldClass}>
+            <label className={labelClass}>Email</label>
+            <input className={inputClass} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@domain.com" required />
           </div>
-        </motion.div>
+          <div className={fieldClass}>
+            <label className={labelClass}>Password</label>
+            <input className={inputClass} type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 6 characters" required />
+          </div>
+          <div className={fieldClass}>
+            <label className={labelClass}>Confirm password</label>
+            <input className={inputClass} type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat password" required />
+          </div>
 
-        <AuthInput
-          type="text"
-          placeholder="Full name"
-          icon={User}
-          value={name}
-          onChange={setName}
-          delay={0.2}
-          //disabled={isLoading}  // ← NEW (if you added disabled support)
-        />
+          <label className="flex items-start gap-2 pt-1 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(e) => setAgreedToTerms(e.target.checked)}
+              className="mt-0.5 accent-black dark:accent-white"
+            />
+            <span>
+              I agree to the <Link to="#" className="luxury-gold-text">Terms of Service</Link> and{" "}
+              <Link to="#" className="luxury-gold-text">Privacy Policy</Link>
+            </span>
+          </label>
 
-        <AuthInput
-          type="email"
-          placeholder="Email address"
-          icon={Mail}
-          value={email}
-          onChange={setEmail}
-          delay={0.3}
-         // disabled={isLoading}  // ← NEW (if you added disabled support)
-        />
-
-        <AuthInput
-          type="password"
-          placeholder="Password"
-          icon={Lock}
-          value={password}
-          onChange={setPassword}
-          delay={0.4}
-         // disabled={isLoading}  // ← NEW (if you added disabled support)
-        />
-
-        <AuthInput
-          type="password"
-          placeholder="Confirm password"
-          icon={Lock}
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          delay={0.5}
-          //disabled={isLoading}  // ← NEW (if you added disabled support)
-        />
-
-        {/* ========== NEW: Updated Checkbox with State ========== */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6, duration: 0.4 }}
-          className="flex items-start gap-2 text-sm"
-        >
-          <input 
-            type="checkbox" 
-            checked={agreedToTerms}
-            onChange={(e) => setAgreedToTerms(e.target.checked)}
-            className="w-4 h-4 mt-0.5 rounded border-border bg-input accent-primary" 
-          />
-          <span className="text-muted-foreground">
-            I agree to the{" "}
-            <Link to="#" className="text-primary hover:text-primary/80 transition-colors">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link to="#" className="text-primary hover:text-primary/80 transition-colors">
-              Privacy Policy
-            </Link>
-          </span>
-        </motion.div>
-        {/* ========== END Checkbox ========== */}
-
-        {/* ========== NEW: Button with Loading State ========== */}
-        <motion.button
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7, duration: 0.4 }}
-          type="submit"
-          disabled={isLoading}
-          className="btn-primary w-full flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              Creating Account...
-            </>
-          ) : (
-            <>
-              Create Account
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </>
-          )}
-        </motion.button>
-        {/* ========== END Button ========== */}
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8, duration: 0.4 }}
-          className="space-y-4 pt-4"
-        >
-          <p className="text-center text-muted-foreground text-sm">
-            Already have an account?{" "}
-            <Link to="/" className="text-primary hover:text-primary/80 font-semibold transition-colors">
-              Sign In
-            </Link>
-          </p>
-
-          <Link
-            to="/trainer/signup"
-            className="btn-accent w-full flex items-center justify-center gap-2 group"
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="luxury-gold-btn flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-xs font-bold uppercase tracking-[0.18em] disabled:opacity-60"
           >
-            Sign Up as Trainer
-            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {isLoading ? "Creating" : "Create account"}
+          </button>
+        </form>
+
+        <div className="mt-6 space-y-3 text-center text-xs">
+          <p className="text-muted-foreground">
+            Already registered?{" "}
+            <Link to="/" className="font-semibold luxury-gold-text">Sign in</Link>
+          </p>
+          <Link to="/trainer/signup" className="inline-block text-muted-foreground hover:text-primary">
+            Register as a trainer
           </Link>
-        </motion.div>
-      </form>
-    </AuthLayout>
+        </div>
+      </div>
+    </div>
   );
 };
 
