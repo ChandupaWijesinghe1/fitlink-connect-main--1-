@@ -315,7 +315,7 @@ const ClientDashboard = () => {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background">
-      <DashboardHeader clientName={user?.name || "User"} />
+      <DashboardHeader />
 
       <main className="mx-auto w-full max-w-md space-y-5 px-5 pb-4">
         <section className="grid grid-cols-2 gap-3">

@@ -75,8 +75,6 @@ const TrainerDashboard = () => {
   const [isLoadingFeed, setIsLoadingFeed] = useState(false);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
   const [unreadMessages, setUnreadMessages] = useState(0);
-  const trainerName = user?.name || "";
-  
   // Client states
   const [clientSearchQuery, setClientSearchQuery] = useState("");
   const [selectedClient, setSelectedClient] = useState<any>(null);
@@ -300,7 +298,7 @@ const TrainerDashboard = () => {
         <div className="mx-auto flex w-full max-w-md items-center justify-between gap-3 px-5 py-4">
           <div className="min-w-0">
             <h1 className="truncate font-heading text-lg font-bold text-foreground">
-              {trainerName || "Trainer hub"}
+              FitConnect
             </h1>
             <p className="truncate text-xs text-primary">
               {myClients.length} clients

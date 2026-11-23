@@ -7,7 +7,7 @@
 
 @layer base {
   :root {
-    --app-bottom-nav: calc(4.85rem + env(safe-area-inset-bottom));
+    --app-bottom-nav: calc(5.6rem + env(safe-area-inset-bottom));
     --background: 150 18% 96%;
     --foreground: 160 28% 10%;
 
@@ -186,6 +186,16 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-body);
+    background-image:
+      radial-gradient(90% 42% at 50% -12%, rgba(255, 255, 255, 0.72), transparent 58%),
+      radial-gradient(36% 28% at 100% 0%, rgba(0, 0, 0, 0.04), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(80% 46% at 50% -8%, rgba(255, 255, 255, 0.09), transparent 56%),
+      radial-gradient(42% 32% at 100% 8%, rgba(255, 255, 255, 0.05), transparent 62%);
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -197,7 +207,7 @@
 
 @layer components {
   .glass-card {
-    @apply rounded-2xl border border-border bg-card shadow-none;
+    @apply rounded-2xl border border-white/40 bg-card shadow-none backdrop-blur-xl;
   }
 
   .icon-chip {
@@ -205,7 +215,7 @@
   }
 
   .tap-card {
-    @apply rounded-2xl border border-border bg-card transition active:scale-[0.98];
+    @apply rounded-2xl border border-white/40 bg-card backdrop-blur-xl transition active:scale-[0.98];
   }
 
   .gradient-text {
@@ -351,4 +361,33 @@
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+/* Frosted surfaces. Colours stay on the existing tokens. */
+html:not(.dark) .bg-card,
+html:not(.dark) .tap-card,
+html:not(.dark) .glass-card,
+html:not(.dark) .input-field,
+html:not(.dark) input.bg-background,
+html:not(.dark) textarea.bg-background {
+  background-color: rgba(255, 255, 255, 0.58);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(255, 255, 255, 0.38));
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 14px 32px rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+html.dark .bg-card,
+html.dark .tap-card,
+html.dark .glass-card,
+html.dark .input-field,
+html.dark input.bg-background,
+html.dark textarea.bg-background {
+  background-color: rgba(255, 255, 255, 0.06);
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03));
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 16px 36px rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
